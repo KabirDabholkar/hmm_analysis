@@ -1,0 +1,9 @@
+1,3,0.0,-0.6726736999779082,vanilla_mode,0
+1,4,0.0,-0.6725038461446733,augmented_mode,0
+1,3,0.0,-0.6727520794015548,augmented_with_shift_mode,0
+n_components,iterations,self_consistency,score,model_name,model_id
+1,3,0.0,-0.6726736999779082,vanilla_mode,0
+n_components,iterations,self_consistency,score,model_name,model_id
+1,4,0.0,-0.6725038461446733,augmented_mode,0
+n_components,iterations,self_consistency,score,model_name,model_id
+1,3,0.0,-0.6727520794015548,augmented_with_shift_mode,0

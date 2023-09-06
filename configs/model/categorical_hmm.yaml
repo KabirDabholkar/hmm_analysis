@@ -1,0 +1,11 @@
+_target_: prepare_model.prepare_model
+_partial_: true
+model:
+  _target_    : hmmlearn.hmm.CategoricalHMM
+  n_components    : 2
+  init_params     : ""
+  n_iter          : 500
+  tol             : 1e-2
+  verbose         : true
+  shift_sampling_window : null
+n_features: 2

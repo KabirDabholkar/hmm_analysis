@@ -1,0 +1,2 @@
+model_name,model_id,n_components,iterations,test_self_consistency,test_score,train_self_consistency,train_score,steady_state_entropy,MI_emission
+vanilla_mode,1,4,142,0.9114403581893183,-0.689092968522095,0.9043602086466436,-0.6571291537673634,1.3737041557906076,0.0

@@ -1,0 +1,106 @@
+defaults:
+  - model@groundtruth: groundtruth
+  - model@model: categorical_hmm
+#  - training_mode@vanilla_mode: vanilla
+#  - training_mode@augmented_with_shift_mode: augmented_with_shift
+#  - training_mode@augmented_mode: augmented
+  - _self_
+  - hydra: multirun
+
+use_groundtruth_as_model: false
+repeat_fit_without_shift: false
+
+run_train: false
+run_analysis: true
+
+length        : 10
+train_trials  : 70
+val_trials    : 70
+test_trials   : 6000
+
+model_index : 0
+
+#model_save_path: models_traintrials${train_trials}_window${selected_training_mode.shift_sampling_window}_shiftlimits${selected_training_mode.shift_limits}/ncomp${model.model.n_components}_${model_index}
+model_save_path: models_traintrials${train_trials}_${training_mode_choice}/ncomp${model.model.n_components}_${model_index}
+
+#####################
+
+training_mode_choice: vanilla_mode
+selected_training_mode: ${training_modes.${training_mode_choice}}
+
+##### Training modes
+training_modes:
+  vanilla_mode:
+    shift_sampling_window: null
+    shift_limits: 1
+    lengths:
+      - ${eval:${length} * ${train_trials}}
+
+  vanilla_sliced_mode:
+    _partial_: true
+    shift_sampling_window: null
+    shift_limits: 0
+    lengths:
+      _target_: numpy.repeat
+      a:
+        _target_: numpy.arange
+        _args_:
+          - ${length}
+          - ${eval:${length}+1}
+        dtype: int
+      repeats: ${train_trials}
+
+  augmented_mode:
+    shift_sampling_window: 10
+    shift_limits: 0
+    lengths:
+      - ${eval:${length} * ${train_trials}}
+
+  augmented_with_shift_mode:
+    shift_sampling_window: 10
+    shift_limits: 10
+    lengths:
+      - ${eval:${length} * ${train_trials}}
+##### Model modifications #######
+
+model:
+  model:
+    shift_sampling_window: ${selected_training_mode.shift_sampling_window}
+    shift_limits: ${selected_training_mode.shift_limits}
+    n_components : 10
+    n_iter: 10
+
+##### Training specs
+training_specs:
+  lengths: ${selected_training_mode.lengths}
+  lengths_val:
+    - ${eval:${length} * ${val_trials}}
+
+
+###### Experiment ########
+
+all_data:
+  _target_  : prepare_model.sample_hmm
+  hmm_model : ${groundtruth}
+  length    : ${eval:'${length}*(${train_trials}+${val_trials}+${test_trials})'}
+  trials    : 1
+
+all_data_tuples:
+  _target_ : numpy.split
+  ary      : ${all_data}
+  indices_or_sections:
+    - ${eval:'${length} * ${train_trials}'}
+    - ${eval:'${length} * (${train_trials}+${val_trials})'}
+  axis: 0
+
+
+######### Analysis ##########
+analysis:
+  compute_train_score_and_SC  : false
+  compute_test_score_and_SC   : false
+  compute_SSent               : false
+  compute_MI_emission         : false
+  compute_MI_trans            : false
+  compute_D_JS_stationary_pi  : false
+  compute_proj                : false
+  compute_svd_hidden          : true
