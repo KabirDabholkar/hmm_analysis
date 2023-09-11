@@ -1,0 +1,5 @@
+_target_: prepare_model.specify_groundtruth_state
+num_hid_states  : ???
+num_obs_states  : ???
+eps             : 0.4
+seed            : 0

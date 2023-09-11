@@ -1,0 +1,2 @@
+model_name,model_id,posterior_entropy,n_components,iterations,test_self_consistency,test_score,train_trials,train_self_consistency,train_score,steady_state_entropy,D_JS_stationary_pi,projection_pi,projection_pinf,PR,MI_predict_proba
+Groundtruth,,1.7990227221553627,10,0,0.03460096173223554,-2.287275936383734,70,0.03302589314161891,-2.28239479959724,2.293556255698431,0.0,0.10044272665104567,0.10044272665104567,5.020597534677416,0.11938864709542614

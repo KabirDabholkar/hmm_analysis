@@ -8,6 +8,7 @@ from hmmlearn.hmm import GaussianHMM, CategoricalHMM
 from hmmlearn.vhmm import VariationalCategoricalHMM
 import pickle as pkl
 import os
+from prepare_model import specify_groundtruth_state
 import matplotlib as mpl
 mpl.rcParams['text.usetex'] = True
 #mpl.rcParams['text.latex.preamble'] = [r'\usepackage{amsmath}']
@@ -99,20 +100,6 @@ def specify_groundtruth():
     GT.startprob_ = GT.get_stationary_distribution()
     return GT
 
-
-def specify_groundtruth_state(num_hid_states,num_obs_states,eps=0.4,seed=0):
-    GT = CategoricalHMM(n_components=num_hid_states, init_params="")
-    GT.n_features = num_obs_states
-    rs = np.random.RandomState(seed)
-    GT.startprob_ = np.ones(num_hid_states)/num_hid_states
-    GT.transmat_ = np.eye(num_hid_states,k=1)
-    GT.transmat_[-1,0] = 1.0
-    GT.transmat_ += rs.uniform(0,eps,size=GT.transmat_.shape)
-    GT.transmat_ = GT.transmat_/GT.transmat_.sum(1,keepdims=True)
-    GT.emissionprob_ = np.eye(num_hid_states,num_obs_states)
-    GT.emissionprob_ +=  rs.uniform(0,eps,size=GT.emissionprob_.shape)
-    GT.startprob_ = GT.get_stationary_distribution()
-    return GT
 
 def sample_hmm(hmm_model,length=40,trials=400,seed_base=0):
     X = [hmm_model.sample(length,random_state=check_random_state(i+seed_base))[0] for i in range(trials)]
@@ -471,7 +458,7 @@ def jenson_shannon_divergence(p1,p2,compute_mean = True):
 
 def mutual_info(joint_ab,marginal_a,marginal_b):
     eps = 1e-5
-    return np.linalg.norm(
+    return np.sum(
         joint_ab * (np.log(joint_ab+eps) - np.log(np.outer(marginal_a,marginal_b)+eps) )
     )
 
@@ -509,9 +496,27 @@ def compute_mutual_info_transition(model):
     return mutual_info(joint,marginal_a,marginal_b)
 
 
+def compute_MI_predict_proba(model1,model2,test,window_length):
+    hid_predicted1 = [model1.predict_proba(test[i:i+window_length]) for i in range(test.shape[0]//window_length)]
+    hid_predicted1 = np.concatenate(hid_predicted1)
+    hid_predicted2 = [model2.predict_proba(test[i:i+window_length]) for i in range(test.shape[0]//window_length)]
+    hid_predicted2 = np.concatenate(hid_predicted2)
+
+    joint = (hid_predicted1[:,None]*hid_predicted2[:,:,None]).mean(0).T
+    p1 = hid_predicted1.mean(0)
+    p2 = hid_predicted2.mean(0)
+    print(joint,p1,p2)
+    return mutual_info(joint,p1,p2)
+
+
 def compute_entropy_steady_state(model):
     m = model.get_stationary_distribution()
     return np.sum( - m * np.log(m))
+
+def compute_posterior_entropy(model,test,window_length):
+    hid_predicted = [model.predict_proba(test[i:i+window_length]) for i in range(test.shape[0]//window_length)]
+    hid_predicted = np.concatenate(hid_predicted)
+    return np.sum( - hid_predicted * np.log(hid_predicted),1).mean(0)
 
 def compute_D_JS_stationary_pi(model):
     eps = 1e-5
@@ -526,7 +531,78 @@ def compute_svd_hidden(model,test,window_length):
     return (s**2).sum()**2/(s**4).sum()
 
 
-@hydra.main(version_base=None, config_path=CONFIG_PATH, config_name=CONFIG_NAME)
+
+from sklearn.utils import check_random_state
+def _generate_sample_from_state_batch(self,states,repeat = 1,random_state=None):
+    cdf = np.cumsum(self.emissionprob_[states, :],axis=-1)
+    random_state = check_random_state(random_state)
+    return (cdf[None] > random_state.rand(repeat,*cdf.shape)).argmax(axis=-1)
+
+
+def compute_joint_hidden_twomodels(model1,model2,hid1,hid2,batch_size = 5,log=True):
+    #hid1 = np.stack([model1.sample(n_samples=window_length)[1] for _ in range(batch_size)])
+
+    # obs_samp = GT._generate_sample_from_state(hid2)
+    window_length = hid1.shape[0]
+
+    obs_samp = _generate_sample_from_state_batch(model1, hid1, repeat=batch_size)
+    lengths = [obs_samp.shape[1]] * obs_samp.shape[0]
+    # print(obs_samp.shape)
+    # print(np.stack([np.arange(10)]*3).flatten())
+    hid_proba = model2.predict_proba(obs_samp.reshape(-1, 1), lengths=lengths)
+    hid_proba = hid_proba.reshape(*obs_samp.shape[:2], hid_proba.shape[-1])
+    hid_proba_avg = hid_proba.mean(0)
+    #print(hid_proba_avg.shape,hid2.shape)
+    #print(hid_proba_avg[np.arange(window_length),hid2[:,0]].shape)
+    if log:
+        return np.sum(np.log(hid_proba_avg[np.arange(window_length), hid2]))
+    else:
+        return np.prod(hid_proba_avg[np.arange(window_length), hid2])
+
+def sample(proba,random_state=None,axis=-1):
+    cdf = np.cumsum(proba,axis=axis)
+    #random_state = check_random_state(random_state)
+    return (cdf > np.random.uniform(size=(cdf.shape))).argmax(axis)
+
+def compute_hid_prob(model,hid,log=True):
+    # B = model.emissionprob_
+    pi = model.startprob_
+    A = model.transmat_
+
+    #print(A[0].sum())
+    if log:
+        return  np.log(pi[hid[0]]) + np.sum(np.log(A[hid[:-1], hid[1:]]))
+    else:
+        return pi[hid[0]] * np.prod(A[hid[:-1], hid[1:]])
+
+def compute_MI_twomodels(model1,model2,batch_size_main=10,batch_size_joint = 10):
+    collect_samples = []
+    for i in range(batch_size_main):
+        obs,hid1 = model1.sample(n_samples=10)
+        hid_proba = model2.predict_proba(obs,lengths=None)
+        hid2 = sample(hid_proba)
+        #print(hid2.shape)
+        #fig,ax = plt.subplots()
+        #ax = ax
+        #ax.plot(hid1)
+        #ax = axs[1]
+        #ax.plot(hid2)
+        #plt.show()
+        #print(np.corrcoef(hid1,hid2)[0,1])
+
+        log_joint = compute_joint_hidden_twomodels(model1,model2,hid1,hid2,batch_size=batch_size_joint,log=True)
+        log_hid2_prob = compute_hid_prob(model2,hid2,log=True)
+        #print(log_joint, log_hid2_prob)
+        collect_samples += [log_joint - log_hid2_prob]
+
+    return collect_samples
+
+
+
+
+
+
+@hydra.main(version_base=1.3, config_path=CONFIG_PATH, config_name=CONFIG_NAME)
 def main(cfg):
     OmegaConf.resolve(cfg)
     #print(OmegaConf.to_yaml(cfg))
@@ -563,7 +639,7 @@ def main(cfg):
             model = hydra.utils.instantiate(cfg.groundtruth)
             data = {'model_name': 'Groundtruth',
                     'model_id': None}
-            results_path = 'groundtruth'
+            results_path = os.path.join(cfg.groundtruth_savepath,'groundtruth')
         else:
             model_save_path = cfg.model_save_path
             with open(model_save_path,'rb') as f:
@@ -579,9 +655,10 @@ def main(cfg):
                                                                               window_length=length )
 
             data.update({'n_components': model.n_components,
-                     'iterations': model.monitor_.iter,
-                     'test_self_consistency': test_model_SC,
-                     'test_score': test_score})
+                         'iterations': model.monitor_.iter,
+                         'test_self_consistency': test_model_SC,
+                         'test_score': test_score,
+                         'train_trials': cfg.train_trials})
 
         if cfg.analysis.compute_train_score_and_SC:
             train_score, train_model_SC = self_consistency_and_validation_single(model, (train, [length] * (train.shape[0] // length)),
@@ -613,10 +690,29 @@ def main(cfg):
             })
 
         if cfg.analysis.compute_svd_hidden:
-            PR = compute_svd_hidden(model,test[:2000],window_length=cfg.length)
+            PR = compute_svd_hidden(model,test[:],window_length=cfg.length)
             data.update({'PR':PR})
 
+        if cfg.analysis.compute_MI_models:
+            GT = hydra.utils.instantiate(cfg.groundtruth)
+            log_values = compute_MI_twomodels(model, GT, batch_size_joint=300, batch_size_main=2000)
+            data.update({
+                'mean_MI_with_GT'       : np.mean(log_values),
+                'confidence_MI_with_GT' : np.std(log_values) / np.sqrt(len(log_values))
+            })
 
+        if cfg.analysis.compute_MI_predict_proba:
+            GT = hydra.utils.instantiate(cfg.groundtruth)
+            MI = compute_MI_predict_proba(model, GT, test[:], window_length=cfg.length)
+            data.update({
+                'MI_predict_proba'       : MI
+            })
+
+        if cfg.analysis.compute_posterior_entropy:
+            posterior_entropy = compute_posterior_entropy(model,test[:2000], window_length=cfg.length)
+            data.update({
+                'posterior_entropy'       : posterior_entropy
+            })
 
         save_results_loc = results_path + '.csv'
         if os.path.exists(save_results_loc):
@@ -630,9 +726,39 @@ def main(cfg):
         DF = pd.DataFrame([data])
         DF.to_csv(save_results_loc, index=False)
 
+
 if __name__ == '__main__':
-    #main()
+    main()
     #print(specify_groundtruth_state(5,4).transmat_)
     #print(specify_groundtruth().transmat_.sum(1))
-    #GT = specify_groundtruth_state(5, 5)
 
+    # GT = specify_groundtruth_state(5,5)
+    #
+    # obs, hid = GT.sample(n_samples=10)
+    # hid = hid[:,None]
+
+    #print(compute_joint_hidden_twomodels(GT,GT,hid,hid))
+    #print(compute_hid_prob(GT,hid))
+    #print()
+    # log_values = compute_MI_twomodels(GT,GT,batch_size_joint = 300,batch_size_main = 2000)
+    # plt.hist(log_values,bins=50)
+    # plt.show()
+
+    #print(np.mean(log_values),np.std(log_values)/np.sqrt(len(log_values)))
+
+    #compute_MI_twomodels(GT, GT, batch_size_joint=500, batch_size_main=1)
+
+    # batch_size = 5
+    # hid2 = np.stack([GT.sample(n_samples=10)[1] for _ in range(batch_size)])
+    #
+    #
+    # #obs_samp = GT._generate_sample_from_state(hid2)
+    # obs_samp = _generate_sample_from_state_batch(GT,hid2)
+    # lengths = [obs_samp.shape[1]]*obs_samp.shape[0]
+    # #print(obs_samp.shape)
+    # #print(np.stack([np.arange(10)]*3).flatten())
+    # hid_proba = GT.predict_proba(obs_samp.reshape(-1, 1),lengths=lengths)
+    # hid_proba = hid_proba.reshape(*obs_samp.shape[:2],hid_proba.shape[-1])
+    # hid_proba_avg = hid_proba.mean(0)
+    # print(hid_proba_avg.shape)
+    #

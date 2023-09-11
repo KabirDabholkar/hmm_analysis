@@ -1,0 +1,2 @@
+model_name,model_id,n_components,iterations,test_self_consistency,test_score,train_self_consistency,train_score,steady_state_entropy,MI_emission,MI_transition,D_JS_stationary_pi,projection_pi,projection_pinf,PR,mean_MI_with_GT,confidence_MI_with_GT,MI_predict_proba,posterior_entropy
+Groundtruth,,5,0,0.0430891298468382,-1.5645506768717938,0.0425302484771003,-1.5700551797567222,1.6039809510755172,0.3147653396065842,0.3286999036370052,0.0,0.1962802961256488,0.1962802961256488,4.194463889188307,3.614828704149352,0.0759309906192099,0.2714745810397243,0.8839580645434255

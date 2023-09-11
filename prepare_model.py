@@ -13,6 +13,20 @@ def prepare_model(model,X_train,lengths,n_features=2):
     model.monitor_.n_iter = mon_n_iter
     return model
 
+def specify_groundtruth_state(num_hid_states,num_obs_states,eps=0.4,seed=0):
+    GT = CategoricalHMM(n_components=num_hid_states, init_params="")
+    GT.n_features = num_obs_states
+    rs = np.random.RandomState(seed)
+    GT.startprob_ = np.ones(num_hid_states)/num_hid_states
+    GT.transmat_ = np.eye(num_hid_states,k=1)
+    GT.transmat_[-1,0] = 1.0
+    GT.transmat_ += rs.uniform(0,eps,size=GT.transmat_.shape)
+    GT.transmat_ /= GT.transmat_.sum(1,keepdims=True)
+    GT.emissionprob_ = np.eye(num_hid_states,num_obs_states)
+    GT.emissionprob_ +=  rs.uniform(0,eps,size=GT.emissionprob_.shape)
+    GT.emissionprob_ /= GT.emissionprob_.sum(1,keepdims=True)
+    GT.startprob_ = GT.get_stationary_distribution()
+    return GT
 
 
 def specify_groundtruth():

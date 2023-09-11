@@ -32,7 +32,7 @@ def main(cfg):
             model = hydra.utils.instantiate(cfg.groundtruth)
             data = {'model_name': 'Groundtruth',
                     'model_id': None}
-            results_path = 'groundtruth'
+            results_path = cfg.groundtruth_savepath + 'groundtruth'
         else:
             model_save_path = cfg.model_save_path
             with open(model_save_path,'rb') as f:
@@ -94,7 +94,32 @@ def main(cfg):
     fig.savefig(results_path + '_hid_predicted.png')
     plt.close()
 
+    ##### mutual info  ####
+    window_length = cfg.length
+    GT = hydra.utils.instantiate(cfg.groundtruth)
+    hid_predicted1 = [GT.predict_proba(test[i:i+window_length]) for i in range(test.shape[0]//window_length)]
+    hid_predicted1 = np.concatenate(hid_predicted1)
+    hid_predicted2 = [model.predict_proba(test[i:i+window_length]) for i in range(test.shape[0]//window_length)]
+    hid_predicted2 = np.concatenate(hid_predicted2)
 
+    joint = (hid_predicted1[:,None]*hid_predicted2[:,:,None]).mean(0).T
+    p1 = hid_predicted1.mean(0)
+    p2 = hid_predicted2.mean(0)
+    vmax = np.concatenate([joint,np.outer(p1,p2)]).max()
+    fig, axs = plt.subplots(1,2)
+    ax = axs[0]
+    im = ax.imshow(joint,vmin=0,vmax=vmax,interpolation='nearest',aspect='equal')
+    ax = axs[1]
+    im = ax.imshow(np.outer(p1,p2), vmin=0, vmax=vmax, interpolation='nearest', aspect='equal')
+    #fig.colorbar(im,ax=ax,shrink=0.5)
+    #ax.set_xlabel('time')
+    #ax.set_ylabel('hidden state')
+    ax.set_title(data['model_name'] + ' ')
+    ax.set_xticks([])
+    ax.set_yticks([])
+    fig.tight_layout()
+    fig.savefig(results_path + '_MI_probs.png')
+    plt.close()
 
 if __name__ == '__main__':
     main()
