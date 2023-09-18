@@ -7,30 +7,31 @@ defaults:
 #  - training_mode@augmented_mode: augmented
   - _self_
   - hydra: multirun
+  - override hydra/launcher: joblib
 
 use_groundtruth_as_model: false
-repeat_fit_without_shift: false
+
 
 run_train: true
 run_analysis: true
 
 length        : 10
-train_trials  : 700
+train_trials  : 70
 val_trials    : 70
 test_trials   : 10000
 
 model_index : 0
 
 groundtruth :
-  num_hid_states : 5
-  num_obs_states : 5
+  num_hid_states : 12
+  num_obs_states : 12
   seed           : 0
   eps            : 0.4
 
 
 
 #model_save_path: all_models/state2_obs2_GT/models_traintrials${train_trials}_window${selected_training_mode.shift_sampling_window}_shiftlimits${selected_training_mode.shift_limits}/ncomp${model.model.n_components}_${model_index}
-groundtruth_savepath: all_models/state${groundtruth.num_hid_states}_obs${groundtruth.num_obs_states}_GT/
+groundtruth_savepath: all_models_validated/state${groundtruth.num_hid_states}_obs${groundtruth.num_obs_states}_GT/
 model_save_path: ${groundtruth_savepath}/models_traintrials${train_trials}_${training_mode_choice}/ncomp${model.model.n_components}_${model_index}
 
 #####################
@@ -45,6 +46,9 @@ training_modes:
     shift_limits: 1
     lengths:
       - ${eval:${length} * ${train_trials}}
+    lengths_val:
+      - ${eval:${length} * ${val_trials}}
+    repeat_fit_without_shift: false
 
   vanilla_sliced_mode:
     _partial_: true
@@ -59,18 +63,43 @@ training_modes:
           - ${eval:${length}+1}
         dtype: int
       repeats: ${train_trials}
+    lengths_val:
+      _target_: numpy.repeat
+      a:
+        _target_: numpy.arange
+        _args_:
+          - ${length}
+          - ${eval:${length}+1}
+        dtype: int
+      repeats: ${val_trials}
+    repeat_fit_without_shift: false
 
   augmented_mode:
     shift_sampling_window: 10
     shift_limits: 0
     lengths:
       - ${eval:${length} * ${train_trials}}
+    lengths_val:
+      - ${eval:${length} * ${val_trials}}
+    repeat_fit_without_shift: false
 
   augmented_with_shift_mode:
     shift_sampling_window: 10
     shift_limits: 10
     lengths:
       - ${eval:${length} * ${train_trials}}
+    lengths_val:
+      - ${eval:${length} * ${val_trials}}
+    repeat_fit_without_shift: false
+
+  augmented_with_shift_repeatwithoutshift_mode:
+    shift_sampling_window: 10
+    shift_limits: 10
+    lengths:
+      - ${eval:${length} * ${train_trials}}
+    lengths_val:
+      - ${eval:${length} * ${val_trials}}
+    repeat_fit_without_shift: true
 ##### Model modifications #######
 
 model:
@@ -79,14 +108,17 @@ model:
     shift_limits: ${selected_training_mode.shift_limits}
     n_components : 10
     n_iter: 10
+    verbose: false
   n_features: ${groundtruth.num_obs_states}
 
 ##### Training specs
 training_specs:
   lengths: ${selected_training_mode.lengths}
-  lengths_val:
-    - ${eval:${length} * ${val_trials}}
+  lengths_val: ${selected_training_mode.lengths_val}
+  #lengths_val:
+  #  - ${eval:${length} * ${val_trials}}
 
+repeat_fit_without_shift: ${selected_training_mode.repeat_fit_without_shift}
 
 ###### Experiment ########
 

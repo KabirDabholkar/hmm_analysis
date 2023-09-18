@@ -602,7 +602,7 @@ def compute_MI_twomodels(model1,model2,batch_size_main=10,batch_size_joint = 10)
 
 
 
-@hydra.main(version_base=1.3, config_path=CONFIG_PATH, config_name=CONFIG_NAME)
+@hydra.main(version_base='1.3', config_path=CONFIG_PATH, config_name=CONFIG_NAME)
 def main(cfg):
     OmegaConf.resolve(cfg)
     #print(OmegaConf.to_yaml(cfg))
@@ -621,8 +621,9 @@ def main(cfg):
     if cfg.run_train:
         model_partial = hydra.utils.instantiate(cfg.model)
         lengths = hydra.utils.instantiate(cfg.training_specs.lengths)
+        lengths_val = hydra.utils.instantiate(cfg.training_specs.lengths)
         model = model_partial(X_train = train,lengths = lengths)
-        model.fit(X=train,lengths = lengths)
+        model.fit(X=train,lengths = lengths,X_val = val, lengths_val=lengths_val )
         if cfg.repeat_fit_without_shift:
             model.shift_limits = 0
             model.fit(X=train, lengths=lengths)
