@@ -16,7 +16,7 @@ run_train: true
 run_analysis: true
 
 length        : 10
-train_trials  : 70
+train_trials  : 200
 val_trials    : 70
 test_trials   : 10000
 
