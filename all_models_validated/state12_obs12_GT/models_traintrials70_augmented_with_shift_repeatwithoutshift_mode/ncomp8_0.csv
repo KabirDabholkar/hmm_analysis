@@ -1,2 +1,0 @@
-model_name,model_id,n_components,iterations,test_self_consistency,test_score,train_trials,train_self_consistency,train_score,steady_state_entropy,D_JS_stationary_pi,projection_pi,projection_pinf,PR,MI_predict_proba,posterior_entropy
-augmented_with_shift_repeatwithoutshift_mode,0,8,7,0.09489355954556414,-2.519666463119232,70,0.09314001861693254,-2.4309283065152547,1.8073793585745421,0.023752104069353228,0.09552799665325952,0.09607927821114416,3.36270168821985,0.03737976327838414,1.2028366057117297

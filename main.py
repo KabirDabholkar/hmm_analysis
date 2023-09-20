@@ -598,7 +598,11 @@ def compute_MI_twomodels(model1,model2,batch_size_main=10,batch_size_joint = 10)
     return collect_samples
 
 
-
+def compute_data_entropy(observations):
+    ### i.e entropy of data
+    bincounts = np.bincount(observations[:,0])
+    pmf = bincounts/len(observations[:,0])
+    return -(pmf * np.log(pmf)).sum()
 
 
 
@@ -713,6 +717,12 @@ def main(cfg):
             posterior_entropy = compute_posterior_entropy(model,test[:2000], window_length=cfg.length)
             data.update({
                 'posterior_entropy'       : posterior_entropy
+            })
+
+        if cfg.analysis.compute_data_entropy:
+            minus_test_entropy = -compute_data_entropy(test)
+            data.update({
+                'minus_test_entropy': minus_test_entropy
             })
 
         save_results_loc = results_path + '.csv'

@@ -38,7 +38,7 @@ mpl.rcParams['text.usetex'] = True
 #
 #     return DF,main_path
 
-def collater(main_dir = 'all_models_validated/state12_obs12_GT'):
+def collater(main_dir = 'all_models_validated/state5_obs3_GT'):
     options = ['augmented_mode','augmented_with_shift_mode','augmented_with_shift_repeatwithoutshift_mode','vanilla_sliced_mode']#'vanilla_mode'
     main_path = os.path.join(main_dir,'models_traintrials70_')
     dir_names = [main_path + opt for opt in options]
@@ -112,11 +112,12 @@ def main():
 
     #sns.scatterplot(data = DF)
     modelsDF = DF[DF.model_name!='Ground truth']
+    modelsGT = DF[DF.model_name == 'Ground truth']
     #modelsDF = modelsDF[modelsDF.score>-2.31]
     #modelsDF = modelsDF[modelsDF.score > -1.70]
     #modelsDF = modelsDF[modelsDF.test_score > -1.05]
     #modelsDF = modelsDF[modelsDF.test_score > -2.0]
-    modelsDF = modelsDF[modelsDF.test_score > -2.55]
+    modelsDF = modelsDF[modelsDF.test_score > modelsGT.minus_test_entropy.values[0]]
 
     print(os.path.join('plots', main_dir, 'test_PR_vs_score.png'))
 
