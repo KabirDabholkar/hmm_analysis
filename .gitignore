@@ -1,4 +1,5 @@
-all_models*
+all_models
+all_models_validated
 __pycache__
 .idea
 .DS_Store
