@@ -2,16 +2,17 @@ defaults:
   #- model@groundtruth: groundtruth2state
   - model@groundtruth: groundtruth_nstate
   - model@model: categorical_hmm
+  - training_modes
 #  - training_mode@vanilla_mode: vanilla
 #  - training_mode@augmented_with_shift_mode: augmented_with_shift
 #  - training_mode@augmented_mode: augmented
   - _self_
-#  - hydra: multirun
-#  - override hydra/launcher: joblib
+  - hydra: multirun
+  - override hydra/launcher: joblib
 
-use_groundtruth_as_model: true
+use_groundtruth_as_model: false
 
-run_train: false
+run_train: true
 run_analysis: true
 
 length        : 10
@@ -28,7 +29,6 @@ groundtruth :
   eps            : 0.4
 
 
-
 #model_save_path: all_models/state2_obs2_GT/models_traintrials${train_trials}_window${selected_training_mode.shift_sampling_window}_shiftlimits${selected_training_mode.shift_limits}/ncomp${model.model.n_components}_${model_index}
 groundtruth_savepath: all_models_validated/state${groundtruth.num_hid_states}_obs${groundtruth.num_obs_states}_GT/
 model_save_path: ${groundtruth_savepath}/models_traintrials${train_trials}_${training_mode_choice}/ncomp${model.model.n_components}_${model_index}
@@ -38,67 +38,7 @@ model_save_path: ${groundtruth_savepath}/models_traintrials${train_trials}_${tra
 training_mode_choice: vanilla_mode
 selected_training_mode: ${training_modes.${training_mode_choice}}
 
-##### Training modes
-training_modes:
-  vanilla_mode:
-    shift_sampling_window: null
-    shift_limits: 1
-    lengths:
-      - ${eval:${length} * ${train_trials}}
-    lengths_val:
-      - ${eval:${length} * ${val_trials}}
-    repeat_fit_without_shift: false
 
-  vanilla_sliced_mode:
-    _partial_: true
-    shift_sampling_window: null
-    shift_limits: 0
-    lengths:
-      _target_: numpy.repeat
-      a:
-        _target_: numpy.arange
-        _args_:
-          - ${length}
-          - ${eval:${length}+1}
-        dtype: int
-      repeats: ${train_trials}
-    lengths_val:
-      _target_: numpy.repeat
-      a:
-        _target_: numpy.arange
-        _args_:
-          - ${length}
-          - ${eval:${length}+1}
-        dtype: int
-      repeats: ${val_trials}
-    repeat_fit_without_shift: false
-
-  augmented_mode:
-    shift_sampling_window: 10
-    shift_limits: 0
-    lengths:
-      - ${eval:${length} * ${train_trials}}
-    lengths_val:
-      - ${eval:${length} * ${val_trials}}
-    repeat_fit_without_shift: false
-
-  augmented_with_shift_mode:
-    shift_sampling_window: 10
-    shift_limits: 10
-    lengths:
-      - ${eval:${length} * ${train_trials}}
-    lengths_val:
-      - ${eval:${length} * ${val_trials}}
-    repeat_fit_without_shift: false
-
-  augmented_with_shift_repeatwithoutshift_mode:
-    shift_sampling_window: 10
-    shift_limits: 10
-    lengths:
-      - ${eval:${length} * ${train_trials}}
-    lengths_val:
-      - ${eval:${length} * ${val_trials}}
-    repeat_fit_without_shift: true
 ##### Model modifications #######
 
 model:

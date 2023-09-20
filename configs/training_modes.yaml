@@ -1,0 +1,99 @@
+train_trials  : ???
+val_trials    : ???
+length        : ???
+
+
+##### Training modes
+training_modes:
+  vanilla_mode:
+    shift_sampling_window: null
+    shift_limits: 1
+    lengths:
+      - ${eval:${length} * ${train_trials}}
+    lengths_val:
+      - ${eval:${length} * ${val_trials}}
+    repeat_fit_without_shift: false
+
+  vanilla_sliced_mode:
+    _partial_: true
+    shift_sampling_window: null
+    shift_limits: 0
+    lengths:
+      _target_: numpy.repeat
+      a:
+        _target_: numpy.arange
+        _args_:
+          - ${length}
+          - ${eval:${length}+1}
+        dtype: int
+      repeats: ${train_trials}
+    lengths_val:
+      _target_: numpy.repeat
+      a:
+        _target_: numpy.arange
+        _args_:
+          - ${length}
+          - ${eval:${length}+1}
+        dtype: int
+      repeats: ${val_trials}
+    repeat_fit_without_shift: false
+
+  augmented_mode:
+    shift_sampling_window: ${length}
+    shift_limits: 0
+    lengths:
+      - ${eval:${length} * ${train_trials}}
+    lengths_val:
+      - ${eval:${length} * ${val_trials}}
+    repeat_fit_without_shift: false
+
+  augmented_mode_long:
+    shift_sampling_window: ${eval: 2*${length}}
+    shift_limits: 0
+    lengths:
+      - ${eval:${length} * ${train_trials}}
+    lengths_val:
+      - ${eval:${length} * ${val_trials}}
+    repeat_fit_without_shift: false
+
+
+  augmented_with_shift_mode:
+    shift_sampling_window: ${length}
+    shift_limits: ${length}
+    lengths:
+      - ${eval:${length} * ${train_trials}}
+    lengths_val:
+      - ${eval:${length} * ${val_trials}}
+    repeat_fit_without_shift: false
+
+  augmented_with_shift_repeatwithoutshift_mode:
+    shift_sampling_window: ${length}
+    shift_limits: ${length}
+    lengths:
+      - ${eval:${length} * ${train_trials}}
+    lengths_val:
+      - ${eval:${length} * ${val_trials}}
+    repeat_fit_without_shift: true
+
+  sliced_and_augmented_with_shift:
+    shift_sampling_window: ${length}
+    shift_limits: ${10}
+    lengths:
+      _target_: numpy.repeat
+      a:
+        _target_: numpy.arange
+        _args_:
+          - ${length}
+          - ${eval:${length}+1}
+        dtype: int
+      repeats: ${train_trials}
+    lengths_val:
+      _target_: numpy.repeat
+      a:
+        _target_: numpy.arange
+        _args_:
+          - ${length}
+          - ${eval:${length}+1}
+        dtype: int
+      repeats: ${val_trials}
+    repeat_fit_without_shift: false

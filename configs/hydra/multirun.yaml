@@ -2,7 +2,7 @@ mode: MULTIRUN
 sweeper:
     params:
       model_index : 0,1,2,4,5,6,7,8,9
-      model.model.n_components : 200  #,1,2,3,4,6,8,10,20,50
+      model.model.n_components : 1,2,3,4,6,8,10,20,50
       model.model.n_iter: 100
       #selected_training_mode: ${vanilla_mode} #, ${augmented_mode} #, ${augmented_with_shift_mode}
-      training_mode_choice: vanilla_sliced_mode, augmented_with_shift_mode, augmented_mode, augmented_with_shift_repeatwithoutshift_mode #, #,  #,vanilla_mode,  #
+      training_mode_choice: augmented_mode_long #vanilla_sliced_mode, augmented_with_shift_mode, augmented_mode, augmented_with_shift_repeatwithoutshift_mode #, #,  #,vanilla_mode,  #
