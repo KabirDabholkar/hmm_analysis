@@ -13,7 +13,7 @@ def prepare_model(model,X_train,lengths,n_features=2):
     model.monitor_.n_iter = mon_n_iter
     return model
 
-def specify_groundtruth_state(num_hid_states,num_obs_states,eps=0.4,seed=0):
+def specify_groundtruth_state(num_hid_states,num_obs_states,eps=0.4,emission_eps=0.4,seed=0,start_prob_dist=None):
     GT = CategoricalHMM(n_components=num_hid_states, init_params="")
     GT.n_features = num_obs_states
     rs = np.random.RandomState(seed)
@@ -23,9 +23,13 @@ def specify_groundtruth_state(num_hid_states,num_obs_states,eps=0.4,seed=0):
     GT.transmat_ += rs.uniform(0,eps,size=GT.transmat_.shape)
     GT.transmat_ /= GT.transmat_.sum(1,keepdims=True)
     GT.emissionprob_ = np.eye(num_hid_states,num_obs_states)
-    GT.emissionprob_ +=  rs.uniform(0,eps,size=GT.emissionprob_.shape)
+    GT.emissionprob_ +=  rs.uniform(0,emission_eps,size=GT.emissionprob_.shape)
     GT.emissionprob_ /= GT.emissionprob_.sum(1,keepdims=True)
-    GT.startprob_ = GT.get_stationary_distribution()
+    if start_prob_dist is None:
+        GT.startprob_ = GT.get_stationary_distribution()
+    else:
+        GT.startprob_ = start_prob_dist #(shape=GT.startprob_.shape)
+        GT.startprob_ /= GT.startprob_.sum()
     return GT
 
 
@@ -48,3 +52,9 @@ def sample_hmm(hmm_model,length=40,trials=400,seed_base=0):
     X = np.stack(X)
     X = X.flatten()[..., None]
     return X
+
+if __name__ == '__main__':
+    GT = specify_groundtruth_state(10,10,
+                              start_prob_dist=lambda shape: (np.arange(shape[0])>5).astype(float) )
+
+

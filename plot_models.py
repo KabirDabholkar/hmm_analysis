@@ -13,7 +13,8 @@ mpl.rcParams['text.usetex'] = True
 #mpl.rcParams['text.latex.preamble'] = [r'\usepackage{amsmath}']
 
 CONFIG_PATH = "configs"
-CONFIG_NAME = "config"
+# CONFIG_NAME = "config"
+CONFIG_NAME = "config_OOD_protocol"
 
 OmegaConf.register_new_resolver("eval", eval)
 OmegaConf.register_new_resolver("ind", lambda a,i: a[i])
@@ -37,7 +38,7 @@ def main(cfg):
             model_save_path = cfg.model_save_path
             with open(model_save_path,'rb') as f:
                 model = pkl.load(f)
-            data = {'model_name': cfg.training_mode_choice,
+            data = {'model_name': cfg.model_name,
                     'model_id': cfg.model_index}
 
             results_path = cfg.model_save_path
@@ -82,7 +83,7 @@ def main(cfg):
     plt.close()
 
     ##### predicted probability  ####
-    hid_predicted = model.predict_proba(test[:10])
+    hid_predicted = model.predict_proba(test[3*cfg.length:(3+1)*cfg.length])
     fig, ax = plt.subplots()
     im = ax.imshow(hid_predicted.T,vmin=0,vmax=1,interpolation='nearest',aspect='equal')
     fig.colorbar(im,ax=ax,shrink=0.5)

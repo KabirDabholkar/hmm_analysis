@@ -1,0 +1,18 @@
+- set_attrs:
+    shift_sampling_window:  10
+    shift_limits: 10
+    params: ste
+  fit_args:
+    X       : train
+    lengths : lengths
+    X_val   : validation
+    lengths_val : lengths_val
+- set_attrs:
+    shift_sampling_window:  null
+    shift_limits: 0
+    params: ste
+  fit_args:
+    X       : train
+    lengths : lengths
+    X_val   : validation
+    lengths_val : lengths_val

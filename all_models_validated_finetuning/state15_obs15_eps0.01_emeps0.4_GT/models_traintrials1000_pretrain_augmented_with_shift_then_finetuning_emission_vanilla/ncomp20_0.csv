@@ -1,0 +1,2 @@
+model_name,model_id,n_components,iterations,train_trials,test_score2,test_self_consistency,test_self_consistency_modified_pi,train_self_consistency,train_score,PR,minus_test_entropy
+pretrain_augmented_with_shift_then_finetuning_emission_vanilla,0,20,28,1000,-3.4021383906119036,0.14368646107985542,0.1457526604393985,0.14336435653503943,-3.395198269428849,15.122189969643099,-2.700354361000281

@@ -3,16 +3,14 @@ defaults:
   - model@groundtruth: groundtruth_nstate
   - model@model: categorical_hmm
   - training_modes
-#  - training_mode@vanilla_mode: vanilla
-#  - training_mode@augmented_with_shift_mode: augmented_with_shift
-#  - training_mode@augmented_mode: augmented
   - _self_
-  - hydra: multirun
-  - override hydra/launcher: joblib
+#  - hydra: multirun
+#  - override hydra/launcher: joblib
 
-use_groundtruth_as_model: false
+use_groundtruth_as_model: true
+model_name              : ${training_mode_choice}
 
-run_train: true
+run_train: false
 run_analysis: true
 
 length        : 10
@@ -22,11 +20,14 @@ test_trials   : 10000
 
 model_index : 0
 
+
 groundtruth :
   num_hid_states : 5
   num_obs_states : 3
   seed           : 0
   eps            : 0.4
+  start_prob_dist: null
+  #start_prob_dist: ${start_probability.array}
 
 
 #model_save_path: all_models/state2_obs2_GT/models_traintrials${train_trials}_window${selected_training_mode.shift_sampling_window}_shiftlimits${selected_training_mode.shift_limits}/ncomp${model.model.n_components}_${model_index}
@@ -78,14 +79,14 @@ all_data_tuples:
 
 ######### Analysis ##########
 analysis:
-  compute_train_score_and_SC  : false
-  compute_test_score_and_SC   : false
+  compute_train_score_and_SC  : true
+  compute_test_score_and_SC   : true
   compute_SSent               : false
   compute_MI_emission         : false
   compute_MI_trans            : false
   compute_D_JS_stationary_pi  : false
   compute_proj                : false
-  compute_svd_hidden          : false
+  compute_svd_hidden          : true
   compute_MI_models           : false
   compute_MI_predict_proba    : false
   compute_posterior_entropy   : false

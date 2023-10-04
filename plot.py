@@ -38,9 +38,13 @@ mpl.rcParams['text.usetex'] = True
 #
 #     return DF,main_path
 
-def collater(main_dir = 'all_models_validated/state5_obs3_GT'):
-    options = ['augmented_mode','augmented_with_shift_mode','augmented_with_shift_repeatwithoutshift_mode','vanilla_sliced_mode']#'vanilla_mode'
-    main_path = os.path.join(main_dir,'models_traintrials70_')
+def collater(main_dir = 'all_models_validated_finetuning/state5_obs5_eps0.1_emeps0.6_GT'):
+    #options = ['augmented_mode','augmented_mode_long','augmented_with_shift_mode','augmented_with_shift_repeatwithoutshift_mode','vanilla_sliced_mode']#'vanilla_mode'
+    #options = ['vanilla_sliced_mode','sliced_and_augmented_with_small_shifts']
+    #options = ['training_vanilla', 'training_augmented_with_shift', 'training_augmented_with_shift_then_vanilla','training_augmented_with_shift_then_vanilla_frozen_te'] # 'training_augmented'
+    #options = ['pretrain_vanilla_then_finetuning_emission_vanilla','pretrain_augmented_with_shift_then_finetuning_emission_vanilla']
+    options = ['training_vanilla']
+    main_path = os.path.join(main_dir,'models_traintrials1000_')
     dir_names = [main_path + opt for opt in options]
     #dir_names += ['models_traintrials700_'+'vanilla_sliced_mode']
 
@@ -107,7 +111,8 @@ def main():
     DF = DF.replace(to_replace='Groundtruth',value='Ground truth')
     print(DF[DF['model_name']=='Ground truth'].n_components)
 
-    DF['score'] = DF['test_score']
+    #DF['score'] = DF['test_score']
+    #DF.loc[DF.model_name == 'Ground truth', 'test_self_consistency'] = DF.loc[DF.model_name == 'Ground truth', 'test_self_consistency_modified_pi']
     DF['self_consistency'] = DF['test_self_consistency']
 
     #sns.scatterplot(data = DF)
@@ -117,7 +122,7 @@ def main():
     #modelsDF = modelsDF[modelsDF.score > -1.70]
     #modelsDF = modelsDF[modelsDF.test_score > -1.05]
     #modelsDF = modelsDF[modelsDF.test_score > -2.0]
-    modelsDF = modelsDF[modelsDF.test_score > modelsGT.minus_test_entropy.values[0]]
+    #modelsDF = modelsDF[modelsDF.test_score > modelsGT.minus_test_entropy.values[0]]
 
     print(os.path.join('plots', main_dir, 'test_PR_vs_score.png'))
 
@@ -135,6 +140,19 @@ def main():
             #'ylim'          : [-2.5,-2.2], #-1.625, -1.550],
             'hlines'        : list(modelsDF.groupby('model_name').test_score.max())
         },
+        # test2 score
+        {
+            'x': 'n_components',
+            'y': 'test_score2',
+            'hue': 'model_name',
+            'data': modelsDF,
+            'data_lines': DF[DF.model_name == 'Ground truth'],
+            'save_path': os.path.join('plots', main_dir, 'test_score2.png'),
+            'func2': sns.lineplot,
+            # 'xlim'          : (0, 51),
+            # 'ylim'          : [-2.5,-2.2], #-1.625, -1.550],
+            'hlines': list(modelsDF.groupby('model_name').test_score2.max())
+        },
         # test self consistency
         {
             'x': 'n_components',
@@ -147,50 +165,14 @@ def main():
             # 'xlim'          : (0, 51),
             #'ylim': [-1.7, -1.5],
         },
-        # test D_JS_stationary_pi
+        # test self consistency modified pi
         {
             'x': 'n_components',
-            'y': 'D_JS_stationary_pi',
+            'y': 'test_self_consistency_modified_pi',
             'hue': 'model_name',
             'data': modelsDF,
             'data_lines': DF[DF.model_name == 'Ground truth'],
-            'save_path': os.path.join('plots', main_dir, 'test_D_JS_stationary_pi.png'),
-            'func2': sns.lineplot,
-            # 'xlim'          : (0, 51),
-            # 'ylim': [-1.7, -1.5],
-        },
-        # test Mutual info predicted probability
-        {
-            'x': 'n_components',
-            'y': 'MI_predict_proba',
-            'hue': 'model_name',
-            'data': modelsDF[modelsDF.test_score>-1.62],
-            'data_lines': DF[DF.model_name == 'Ground truth'],
-            'save_path': os.path.join('plots', main_dir, 'test_MI_predict_proba.png'),
-            'func2': sns.lineplot,
-            # 'xlim'          : (0, 51),
-            # 'ylim': [-1.7, -1.5],
-        },
-        # test Mutual info predicted probability versus score
-        {
-            'x': 'MI_predict_proba',
-            'y': 'test_score',
-            'hue': 'model_name',
-            'data': modelsDF[modelsDF.test_score>-1.62],
-            'data_lines': DF[DF.model_name == 'Ground truth'],
-            'save_path': os.path.join('plots', main_dir, 'test_MI_predict_proba_versus_score.png'),
-            'func2': None,
-            # 'xlim'          : (0, 51),
-            #'ylim': [-1.625, -1.550],
-        },
-        # test Mutual info predicted probability
-        {
-            'x': 'n_components',
-            'y': 'posterior_entropy',
-            'hue': 'model_name',
-            'data': modelsDF,#[modelsDF.test_score > -1.62],
-            'data_lines': DF[DF.model_name == 'Ground truth'],
-            'save_path': os.path.join('plots', main_dir, 'test_posterior_entropy.png'),
+            'save_path': os.path.join('plots', main_dir, 'test_self_consistency_modified_pi.png'),
             'func2': sns.lineplot,
             # 'xlim'          : (0, 51),
             # 'ylim': [-1.7, -1.5],
@@ -214,8 +196,8 @@ def main():
             'hue': 'model_name',
             'data': modelsDF,  # [modelsDF.test_score > -1.62],
             'data_lines': DF[DF.model_name == 'Ground truth'],
-            'save_path':  os.path.join('plots', main_dir, 'test_PR_vs_score.png'),
-            #'func2': sns.lineplot,
+            'save_path': os.path.join('plots', main_dir, 'test_PR_vs_score.png'),
+            # 'func2': sns.lineplot,
             # 'xlim' : [-1.625, -1.550],
             # 'ylim': [-1.7, -1.5],
         },
@@ -227,7 +209,68 @@ def main():
             'data': modelsDF,
             'data_lines': DF[DF.model_name == 'Ground truth'],
             'save_path': os.path.join('plots', main_dir, 'test_self_consistency_vs_score.png'),
-            #'func2': sns.lineplot,
+            # 'func2': sns.lineplot,
+            # 'xlim'          : (0, 51),
+            # 'ylim': [-1.7, -1.5],
+        },
+        # test self consistency vs score
+        {
+            'x': 'test_score',
+            'y': 'test_self_consistency_modified_pi',
+            'hue': 'model_name',
+            'data': modelsDF,
+            'data_lines': DF[DF.model_name == 'Ground truth'],
+            'save_path': os.path.join('plots', main_dir, 'self_consistency_modified_pi_vs_score.png'),
+            # 'func2': sns.lineplot,
+            # 'xlim'          : (0, 51),
+            # 'ylim': [-1.7, -1.5],
+        },
+
+        # test D_JS_stationary_pi
+        {
+            'x': 'n_components',
+            'y': 'D_JS_stationary_pi',
+            'hue': 'model_name',
+            'data': modelsDF,
+            'data_lines': DF[DF.model_name == 'Ground truth'],
+            'save_path': os.path.join('plots', main_dir, 'test_D_JS_stationary_pi.png'),
+            'func2': sns.lineplot,
+            # 'xlim'          : (0, 51),
+            # 'ylim': [-1.7, -1.5],
+        },
+        # test Mutual info predicted probability
+        {
+            'x': 'n_components',
+            'y': 'MI_predict_proba',
+            'hue': 'model_name',
+            'data': modelsDF, #[modelsDF.test_score>-1.62],
+            'data_lines': DF[DF.model_name == 'Ground truth'],
+            'save_path': os.path.join('plots', main_dir, 'test_MI_predict_proba.png'),
+            'func2': sns.lineplot,
+            # 'xlim'          : (0, 51),
+            # 'ylim': [-1.7, -1.5],
+        },
+        # test Mutual info predicted probability versus score
+        {
+            'x': 'MI_predict_proba',
+            'y': 'test_score',
+            'hue': 'model_name',
+            'data': modelsDF, #[modelsDF.test_score>-1.62],
+            'data_lines': DF[DF.model_name == 'Ground truth'],
+            'save_path': os.path.join('plots', main_dir, 'test_MI_predict_proba_versus_score.png'),
+            'func2': None,
+            # 'xlim'          : (0, 51),
+            #'ylim': [-1.625, -1.550],
+        },
+        # test Mutual info predicted probability
+        {
+            'x': 'n_components',
+            'y': 'posterior_entropy',
+            'hue': 'model_name',
+            'data': modelsDF,#[modelsDF.test_score > -1.62],
+            'data_lines': DF[DF.model_name == 'Ground truth'],
+            'save_path': os.path.join('plots', main_dir, 'test_posterior_entropy.png'),
+            'func2': sns.lineplot,
             # 'xlim'          : (0, 51),
             # 'ylim': [-1.7, -1.5],
         },
@@ -245,223 +288,13 @@ def main():
         },
 
     ]
-    for arg in plot_args_list[:]:
+    for arg in plot_args_list[:2]:
         plot_scatter_with_lines(**arg)
 
-    #
-    # fig,ax = plt.subplots()
-    # sns.lineplot(x='n_components',y='score',hue='model_name',data = modelsDF,ax=ax, estimator="max")
-    # sns.scatterplot(x='n_components', y='score', hue='model_name', data=modelsDF, ax=ax,legend=None)
-    # ax.set_xlabel(r'Model $|\mathcal X|$')
-    # l = ax.axhline(DF[DF.model_name == 'Ground truth'].score.values[0], ls='dashed', color='black')
-    # handles, labels = ax.get_legend_handles_labels()
-    # handles += [l]
-    # labels  += ['Ground-truth']
-    # ax.set_ylabel('Test log likelihood')
-    # ax.legend(handles,labels)
-    # ax.set_xlim(0, 51)
-    # ax.set_ylim(-0.68,-0.665)
-    # fig.tight_layout()
-    # print(modelsDF.columns)
-    # fig.savefig('plots/test_score_comparison.png',dpi=200)
-    #
-    # fig, ax = plt.subplots()
-    # sns.lineplot(x='n_components', y='train_score', hue='model_name', data=modelsDF, ax=ax)
-    # sns.scatterplot(x='n_components', y='train_score', hue='model_name', data=modelsDF, ax=ax, legend=None)
-    # ax.set_xlabel(r'Model $|\mathcal X|$')
-    # l = ax.axhline(DF[DF.model_name == 'Ground truth'].train_score.values[0], ls='dashed', color='black')
-    # handles, labels = ax.get_legend_handles_labels()
-    # handles += [l]
-    # labels  += ['Ground-truth']
-    # ax.set_ylabel('Train log likelihood')
-    # ax.legend(handles,labels)
-    # ax.set_ylim(-.7,-0.635)
-    # fig.tight_layout()
-    # print(modelsDF.columns)
-    # fig.savefig('plots/train_score_comparison.png',dpi=200)
-    #
-    # fig,ax = plt.subplots()
-    # sns.lineplot(x='n_components',y='self_consistency',hue='model_name',data = modelsDF,ax=ax)
-    # sns.scatterplot(x='n_components', y='self_consistency', hue='model_name', data=modelsDF, ax=ax, legend=False, alpha=0.6)
-    # l = ax.axhline(DF[DF.model_name   == 'Ground truth'].self_consistency.values[0], ls='dashed', color='black')
-    # ax.set_xlabel(r'Model $|\mathcal X|$')
-    # handles, labels = ax.get_legend_handles_labels()
-    # handles += [l]
-    # labels  += ['Ground-truth']
-    # ax.legend(handles,labels)
-    # fig.tight_layout()
-    # print(modelsDF.columns)
-    # fig.savefig('plots/self_consistency_comparison.png',dpi=200)
-    #
-    # fig,ax = plt.subplots()
-    # sns.lineplot(x='n_components',y='train_self_consistency',hue='model_name',data = modelsDF,ax=ax)
-    # sns.scatterplot(x='n_components', y='train_self_consistency', hue='model_name', data=modelsDF, ax=ax, legend=False, alpha=0.6)
-    # l = ax.axhline(DF[DF.model_name   == 'Ground truth'].self_consistency.values[0], ls='dashed', color='black')
-    # ax.set_xlabel(r'Model $|\mathcal X|$')
-    # handles, labels = ax.get_legend_handles_labels()
-    # handles += [l]
-    # labels  += ['Ground-truth']
-    # ax.legend(handles,labels)
-    # fig.tight_layout()
-    # print(modelsDF.columns)
-    # fig.savefig(os.path.join('plots',main_dir,'train_self_consistency_comparison.png'),dpi=200)
-    #
-    # fig,ax = plt.subplots()
-    # sns.lineplot(x='n_components',y='iterations',hue='model_name',data = modelsDF,ax=ax)
-    # sns.scatterplot(x='n_components', y='iterations', hue='model_name', data=modelsDF, ax=ax, legend=False, alpha=0.6)
-    # l = ax.axhline(DF[DF.model_name   == 'Ground truth'].self_consistency.values[0], ls='dashed', color='black')
-    # ax.set_xlabel(r'Model $|\mathcal X|$')
-    # handles, labels = ax.get_legend_handles_labels()
-    # handles += [l]
-    # labels  += ['Ground-truth']
-    # ax.legend(handles,labels)
-    # ax.set_ylabel('iterations to convergence')
-    # ax.set_ylim(0, 20)
-    # fig.tight_layout()
-    # print(modelsDF.columns)
-    # fig.savefig(os.path.join('plots',main_dir,'iterations_comparison.png'),dpi=200)
-    #
-    #
-    # fig,ax = plt.subplots()
-    # sns.scatterplot(x='score', y='self_consistency', hue='model_name', data=modelsDF, ax=ax, legend=True)
-    # l = ax.axhline(DF[DF.model_name   == 'Ground truth'].self_consistency.values[0], ls='dashed', color='black')
-    # l = ax.axvline(DF[DF.model_name == 'Ground truth'].score.values[0], ls='dashed', color='black')
-    # ax.set_xlabel(r'Test log likelihood')
-    # handles, labels = ax.get_legend_handles_labels()
-    #
-    # handles += [l]
-    # labels  += ['Ground-truth']
-    # ax.legend(handles,labels)
-    # ax.set_ylim(0,1)
-    # ax.set_xlim(-0.75,-0.65)
-    # fig.tight_layout()
-    # print(modelsDF.columns)
-    # fig.savefig(os.path.join('plots',main_dir,'SC_score_comparison.png'),dpi=200)
-    #
-    # ##### Steady state entropoy
-    # fig,ax = plt.subplots()
-    # sns.lineplot(x='n_components',y='steady_state_entropy',hue='model_name',data = modelsDF,ax=ax)
-    # sns.scatterplot(x='n_components', y='steady_state_entropy', hue='model_name', data=modelsDF, ax=ax, legend=False, alpha=0.6)
-    # l = ax.axhline(DF[DF.model_name   == 'Ground truth'].steady_state_entropy.values[0], ls='dashed', color='black')
-    # ax.set_xlabel(r'Model $|\mathcal X|$')
-    # handles, labels = ax.get_legend_handles_labels()
-    # handles += [l]
-    # labels  += ['Ground-truth']
-    # ax.legend(handles,labels)
-    # fig.tight_layout()
-    # print(modelsDF.columns)
-    # fig.savefig(os.path.join('plots',main_dir,'SSentropy_comparison.png'),dpi=200)
-    #
-    # ##### Mutual info emission
-    # fig,ax = plt.subplots()
-    # sns.lineplot(x='n_components',y='MI_emission',hue='model_name',data = modelsDF,ax=ax)
-    # sns.scatterplot(x='n_components', y='MI_emission', hue='model_name', data=modelsDF, ax=ax, legend=False, alpha=0.6)
-    # l = ax.axhline(DF[DF.model_name   == 'Ground truth'].MI_emission.values[0], ls='dashed', color='black')
-    # ax.set_xlabel(r'Model $|\mathcal X|$')
-    # ax.set_ylabel('Mutual info emission')
-    # handles, labels = ax.get_legend_handles_labels()
-    # handles += [l]
-    # labels  += ['Ground-truth']
-    # ax.legend(handles,labels)
-    # fig.tight_layout()
-    # print(modelsDF.columns)
-    # fig.savefig(os.path.join('plots',main_dir,'MI_emission_comparison.png'),dpi=200)
-    #
-    # ##### Mutual info transition
-    # fig,ax = plt.subplots()
-    # sns.lineplot(x='n_components',y='MI_transition',hue='model_name',data = modelsDF,ax=ax)
-    # sns.scatterplot(x='n_components', y='MI_transition', hue='model_name', data=modelsDF, ax=ax, legend=False, alpha=0.6)
-    # l = ax.axhline(DF[DF.model_name   == 'Ground truth'].MI_transition.values[0], ls='dashed', color='black')
-    # ax.set_xlabel(r'Model $|\mathcal X|$')
-    # ax.set_ylabel('Mutual info transition')
-    # handles, labels = ax.get_legend_handles_labels()
-    # handles += [l]
-    # labels  += ['Ground-truth']
-    # ax.legend(handles,labels)
-    # fig.tight_layout()
-    # print(modelsDF.columns)
-    # fig.savefig(os.path.join('plots',main_dir,'MI_transition_comparison.png'),dpi=200)
-    #
-    # ##### Steady state, pi: Jensen shannon div
-    # fig,ax = plt.subplots()
-    # sns.lineplot(x='n_components',y='D_JS_stationary_pi',hue='model_name',data = modelsDF,ax=ax)
-    # sns.scatterplot(x='n_components', y='D_JS_stationary_pi', hue='model_name', data=modelsDF, ax=ax, legend=False, alpha=0.6)
-    # l = ax.axhline(DF[DF.model_name   == 'Ground truth'].D_JS_stationary_pi.values[0], ls='dashed', color='black')
-    # ax.set_xlabel(r'Model $|\mathcal X|$')
-    # ax.set_ylabel(r'$D_{JS}(\pi,p_{\infty}(A))$')
-    # handles, labels = ax.get_legend_handles_labels()
-    # handles += [l]
-    # labels  += ['Ground-truth']
-    # ax.legend(handles,labels)
-    # fig.tight_layout()
-    # print(modelsDF.columns)
-    # fig.savefig(os.path.join('plots',main_dir,'D_JS_stationary_pi_comparison.png'),dpi=200)
-    #
-    # ##### Steady state, pi: Jensen shannon div
-    # fig,ax = plt.subplots()
-    # #DF['projection_pi'] = DF['projection_pi'][0]
-    # #DF['projection_pinf'] = DF['projection_pinf'][0]
-    # #print(DF['projection_pi'].values)
-    # #sns.lineplot(x='projection_pi',y='projection_pinf',hue='model_name',data = DF,ax=ax)
-    # sns.scatterplot(x='projection_pi', y='projection_pinf', hue='model_name', data = modelsDF, ax=ax, legend=True, alpha=0.6)
-    # d = DF[DF.model_name=='Ground truth']
-    # ax.scatter(d.projection_pi, d.projection_pinf, color='black')
-    # ax.set_xlim(0,1)
-    # ax.set_ylim(0,1)
-    # #sns.scatterplot(x='projection_pi', y='projection_pinf', hue='model_name', data=DF[DF.model_name   == 'Ground truth'], ax=ax, legend=False,alpha=0.6)
-    # #l = ax.axhline(DF[DF.model_name   == 'Ground truth'].D_JS_stationary_pi.values[0], ls='dashed', color='black')
-    # #ax.set_xlabel(r'Model $|\mathcal X|$')
-    # #ax.set_ylabel(r'$D_{JS}(\pi,p_{\infty}(A))$')
-    # #handles, labels = ax.get_legend_handles_labels()
-    # #handles += [l]
-    # #labels  += ['Ground-truth']
-    # #ax.legend()#handles,labels)
-    # fig.tight_layout()
-    # fig.savefig(os.path.join('plots',main_dir,'projection_comparison.png'),dpi=200)
-    #
-    # ##### Participation ratio hidden state prob #########
-    # fig,ax = plt.subplots()
-    # sns.lineplot(x='n_components',y='PR',hue='model_name',data = modelsDF,ax=ax)
-    # sns.scatterplot(x='n_components', y='PR', hue='model_name', data=modelsDF, ax=ax, legend=False, alpha=0.6)
-    # l = ax.axhline(DF[DF.model_name   == 'Ground truth'].PR.values[0], ls='dashed', color='black')
-    # ax.set_xlabel(r'Model $|\mathcal X|$')
-    # ax.set_ylabel(r'Participation ratio')
-    # handles, labels = ax.get_legend_handles_labels()
-    # handles += [l]
-    # labels  += ['Ground-truth']
-    # ax.legend(handles,labels)
-    # ax.set_ylim(0,10)
-    # fig.tight_layout()
-    # print(modelsDF.columns)
-    # fig.savefig(os.path.join('plots',main_dir,'PR_comparison.png'),dpi=200)
-    #
-    # ##### Participation ratio hidden state prob #########
-    # fig,ax = plt.subplots()
-    # #sns.lineplot(x='score',y='PR',hue='model_name',data = modelsDF,ax=ax)
-    # sns.scatterplot(x='score', y='PR', hue='model_name', data=modelsDF, ax=ax, legend=False, alpha=0.6)
-    # l = ax.axhline(DF[DF.model_name   == 'Ground truth'].PR.values[0], ls='dashed', color='black')
-    # l = ax.axvline(DF[DF.model_name == 'Ground truth'].score.values[0], ls='dashed', color='black')
-    # ax.set_xlim(-0.69, -0.67)
-    # ax.set_xlabel(r'Test score')
-    # ax.set_ylabel(r'Participation ratio')
-    # handles, labels = ax.get_legend_handles_labels()
-    # #handles += [l]
-    # #labels  += ['Ground-truth']
-    # #ax.legend(handles,labels)
-    # fig.tight_layout()
-    # print(modelsDF.columns)
-    # fig.savefig(os.path.join('plots',main_dir,'score_PR_comparison.png'),dpi=200)
-
-
-    # g = sns.PairGrid(modelsDF,hue='model_name', diag_sharey=False, corner=True)
-    # g.map_lower(sns.scatterplot)
-    # g.map_diag(sns.kdeplot)
-    # fig = g.figure
-    # fig.savefig('plots/plots_pairplot.pdf')
-    print(
-        modelsDF.groupby('model_name').test_score.max() .sort_values(ascending=False)
-        #
-    )
+    # print(
+    #     modelsDF.groupby('model_name').test_score.max() .sort_values(ascending=False)
+    #     #
+    # )
 
 
 

@@ -48,7 +48,7 @@ training_modes:
     repeat_fit_without_shift: false
 
   augmented_mode_long:
-    shift_sampling_window: ${eval: 2*${length}}
+    shift_sampling_window: ${eval:2*${length}}
     shift_limits: 0
     lengths:
       - ${eval:${length} * ${train_trials}}
@@ -75,9 +75,9 @@ training_modes:
       - ${eval:${length} * ${val_trials}}
     repeat_fit_without_shift: true
 
-  sliced_and_augmented_with_shift:
-    shift_sampling_window: ${length}
-    shift_limits: ${10}
+  sliced_and_augmented_with_small_shifts:
+    shift_sampling_window: ${eval:${length} - ${.shift_limits}}
+    shift_limits: 5
     lengths:
       _target_: numpy.repeat
       a:

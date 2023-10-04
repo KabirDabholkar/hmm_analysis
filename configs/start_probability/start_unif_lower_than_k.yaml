@@ -1,0 +1,10 @@
+array:
+  _target_: numpy.concatenate
+  _args_:
+    - - _target_: numpy.ones
+        shape: ${.....k}
+      - _target_: numpy.zeros
+        shape: ${eval:${.....total}-${.....k}}
+
+k     : ???
+total : ???

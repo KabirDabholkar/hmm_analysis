@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 from omegaconf import DictConfig, OmegaConf
 import hydra
+from hydra.utils import instantiate
 from sklearn.utils import check_random_state
 from hmmlearn.hmm import GaussianHMM, CategoricalHMM
 from hmmlearn.vhmm import VariationalCategoricalHMM
@@ -14,22 +15,14 @@ mpl.rcParams['text.usetex'] = True
 #mpl.rcParams['text.latex.preamble'] = [r'\usepackage{amsmath}']
 
 CONFIG_PATH = "configs"
-CONFIG_NAME = "config"
+# CONFIG_NAME = "config"
+CONFIG_NAME = "config_OOD_protocol"
 
 OmegaConf.register_new_resolver("eval", eval)
 OmegaConf.register_new_resolver("ind", lambda a,i: a[i])
 OmegaConf.register_new_resolver("listmul", lambda l, i: [l]*i)
 OmegaConf.register_new_resolver("getattr", getattr)
 
-def prepare_model(model,X_train,lengths,n_features=2):
-    model.n_features = n_features
-    n_iter = model.n_iter
-    mon_n_iter = model.monitor_.n_iter
-    model.n_iter = 0
-    model.fit(X_train, lengths=lengths)
-    model.n_iter = n_iter
-    model.monitor_.n_iter = mon_n_iter
-    return model
 
 def train(model_save_path,train_X_lengths,val_X_lengths,model_n_components=5,n_iter=5,tol=1e-2,shift_sampling_window=None):
     X_train,lengths = train_X_lengths
@@ -87,26 +80,6 @@ def train(model_save_path,train_X_lengths,val_X_lengths,model_n_components=5,n_i
 
     #plt.show()
 
-def specify_groundtruth():
-    GT = CategoricalHMM(n_components=2, init_params="")
-    GT.n_features = 2
-    GT.startprob_ = np.array([1 / 2., 1 / 2.])
-    GT.transmat_ = np.array([[0.7, 0.3],
-                            [0.1, 0.9]])
-
-    GT.emissionprob_ = np.array([[0.3,0.7],
-                                 [0.7,0.3]])
-
-    GT.startprob_ = GT.get_stationary_distribution()
-    return GT
-
-
-def sample_hmm(hmm_model,length=40,trials=400,seed_base=0):
-    X = [hmm_model.sample(length,random_state=check_random_state(i+seed_base))[0] for i in range(trials)]
-    #lengths = [x.shape[0] for x in X]
-    X = np.stack(X)
-    X = X.flatten()[..., None]
-    return X
 
 def generate_groundtruth(GT,length=40,train_trials=400,val_trials=400):
     rs = check_random_state(546)
@@ -141,6 +114,316 @@ def load_model(model_path):
         model = pkl.load(f)
     return model
 
+def plot_validation_scores(models,GT,val_X_lengths,reps = 4,n_components_range = np.arange(2,11,2)):
+
+    X_val,lengths_val = val_X_lengths
+    N = sum(lengths_val)
+    GT_score = GT.score(X_val,lengths=lengths_val)
+    GT_score /= N
+
+    #fig,axs = plt.subplots(1,2,figsize=(12,5),sharey=True)
+    fig, axs = plt.subplots(1, 1, figsize=(6, 5), sharey=True)
+    # ax = axs[0]
+    # ls = []
+    # for i,n_comp in enumerate(n_components_range):
+    #     for id in range(reps):
+    #         model = models[n_comp][id]
+    #         if np.array(model.monitor_.history).shape[0]<3:
+    #             print(np.array(model.monitor_.history)[-1])
+    #             l=ax.axhline(np.array(model.monitor_.history)[-1],color=f'C{i}',lw=1)
+    #         l,=ax.plot(np.array(model.monitor_.history)[1:],color=f'C{i}',lw=1)
+    #     ls.append(l)
+    # l=ax.axhline(GT_score, ls='dashed', label='ground truth score', c='black')
+    # ls = [l]+ls
+    # labels = ['ground truth model'] + [r'$|X|$=%d'%n for n in n_components_range]
+    # ax.legend(ls,labels)
+    # ax.set_xlabel(r'Training steps')
+    # ax.set_ylabel(r'Validation loglikelihood')
+
+    ax = axs#[1]
+    ls = []
+    for i,n_comp in enumerate(n_components_range):
+        for id in range(reps):
+            model = models[n_comp][id]
+            score = model.score(X_val, lengths=lengths_val)
+            score /= N
+            l=ax.scatter(n_comp,score, color=f'C{i}',s=10)
+        ls.append(l)
+    l=ax.axhline(GT_score, ls='dashed', label='ground truth score', c='black')
+    ax.set_xlabel(r'Model $|\mathcal X|$')
+    ax.set_ylabel(r'Test set loglikelihood')
+    ls = [l] + ls
+    labels = ['ground truth model'] + [r'$|\mathcal X|=%d$'%n for n in n_components_range]
+    ax.legend(ls, labels,framealpha=0.4)
+
+
+    fig.tight_layout()
+
+    fig.savefig('plots/validation_score.png',dpi=200)
+    fig.savefig('plots/validation_score.pdf')
+
+def plot_self_consistency(models,GT,val_X_lengths,reps = 4,n_components_range = np.arange(2,11,2),eps=1e-3):
+
+    X_val,lengths_val = val_X_lengths
+    N = sum(lengths_val)
+    D_JS,D_JS_shuffled = self_consistency(GT,X_val,length,Nsamples=1000)
+    GT_SC = np.mean(D_JS)/np.mean(D_JS_shuffled)
+
+
+    fig, axs = plt.subplots(1, 1, figsize=(6, 5), sharey=True)
+
+    ax = axs#[1]
+    ls = []
+    for i,n_comp in enumerate(n_components_range):
+        for id in range(reps):
+            model = models[n_comp][id]
+            D_JS, D_JS_shuffled = self_consistency(model, X_val, length, Nsamples=1000)
+            #if np.mean(D_JS_shuffled)<1e-3:
+
+            model_SC = np.mean(D_JS) / (np.mean(D_JS_shuffled)+eps)
+            l=ax.scatter(n_comp,model_SC, color=f'C{i}',s=10)
+        ls.append(l)
+    l=ax.axhline(GT_SC, ls='dashed', label='ground truth', c='black')
+    ax.set_xlabel(r'Model $|\mathcal X|$')
+    ax.set_ylabel(r"Self consistency")
+    ls = [l] + ls
+    labels = ['ground truth model'] + [r'$|\mathcal X|=%d$'%n for n in n_components_range]
+    ax.legend(ls, labels,framealpha=0.4)
+
+
+    fig.tight_layout()
+    fig.savefig('plots/validation_self_consistency.png',dpi=200)
+    fig.savefig('plots/validation_self_consistency.pdf')
+
+def convert_to_time_invariant(model,K=10):
+    from copy import deepcopy
+    B = model.emissionprob_
+    pi = model.startprob_
+    A = model.transmat_
+    new_model = deepcopy(model)
+    new_model.startprob_ = sum([pi @ np.linalg.matrix_power(A,k) for k in range(K)])/K
+    return new_model
+
+
+def plot_self_consistency_against_validation(models,GT,val_X_lengths,reps = 4,n_components_range = np.arange(2,11,2),eps=1e-3):
+    X_val, lengths_val = val_X_lengths
+    N = sum(lengths_val)
+    D_JS, D_JS_shuffled = self_consistency(GT, X_val, length, Nsamples=1000)
+    GT_SC = np.mean(D_JS) / np.mean(D_JS_shuffled)
+
+    GT_score = GT.score(X_val,lengths=lengths_val)
+    GT_score /= N
+
+    fig, axs = plt.subplots(1, 1, figsize=(6, 5), sharey=True)
+
+    ax = axs  # [1]
+    ls = []
+    for i, n_comp in enumerate(n_components_range):
+        for id in range(reps):
+            model = models[n_comp][id]
+            D_JS, D_JS_shuffled = self_consistency(model, X_val, length, Nsamples=1000)
+
+            score = model.score(X_val, lengths=lengths_val)
+            score /= N
+
+            model_SC = np.mean(D_JS) / (np.mean(D_JS_shuffled) + eps)
+            l = ax.scatter(score, model_SC, color=f'C{i}', s=10)
+        ls.append(l)
+    ax.axvline(GT_score, ls='dashed', label='ground truth score', c='black')
+    l = ax.axhline(GT_SC, ls='dashed', label='ground truth', c='black')
+    ax.set_xlabel(r'Test set loglikelihood')
+    ax.set_ylabel(r"Self consistency")
+    ls = [l] + ls
+    labels = ['ground truth model'] + [r'$|\mathcal X|=%d$' % n for n in n_components_range]
+    ax.legend(ls, labels, framealpha=0.4)
+
+    fig.tight_layout()
+    fig.savefig('plots/validation_self_consistency_vs_loglikelihood2.png', dpi=200)
+    fig.savefig('plots/validation_self_consistency_vs_loglikelihood2.pdf')
+
+def self_consistency_score(model,X_lengths,window_length=10,eps=1e-3):
+    X_val, lengths_val = X_lengths
+    N = sum(lengths_val)
+
+    #D_JS, D_JS_shuffled = self_consistency(model, X_val, window_length, Nsamples=Nsamples)
+    D_JS, D_JS_shuffled =  self_consistency_over_sliced_data(model, X_val, lengths_val, window_length)
+    model_SC = np.mean(D_JS) / (np.mean(D_JS_shuffled) + eps)
+    return model_SC
+
+def normalised_score(model,X_lengths,window_length=10):
+    X_val, lengths_val = X_lengths
+    N = sum(lengths_val)
+    score = model.score(X_val, lengths=lengths_val)
+    score /= N
+    return score
+def self_consistency_and_validation_single(model,X_lengths,window_length = 10,eps=1e-3):
+    X_val, lengths_val = X_lengths
+    N = sum(lengths_val)
+
+    #D_JS, D_JS_shuffled = self_consistency(model, X_val, window_length, Nsamples=Nsamples)
+    D_JS, D_JS_shuffled =  self_consistency_over_sliced_data(model, X_val, lengths_val, window_length)
+
+    score = model.score(X_val, lengths=lengths_val)
+    score /= N
+    # plt.hist(D_JS)
+    # plt.hist(D_JS_shuffled)
+    # plt.show()
+    #print(D_JS)
+    #print(D_JS_shuffled)
+    model_SC = np.mean(D_JS) / (np.mean(D_JS_shuffled) + eps)
+    return score,model_SC
+
+
+def gather_self_consistency_against_validation(models,GT,val_X_lengths,reps = 4,n_components_range = np.arange(2,11,2),eps=1e-3,model_name = 'Vanilla'):
+    X_val, lengths_val = val_X_lengths
+    N = sum(lengths_val)
+    D_JS, D_JS_shuffled = self_consistency(GT, X_val, length, Nsamples=50000)
+    GT_SC = np.mean(D_JS) / np.mean(D_JS_shuffled)
+
+    GT_score = GT.score(X_val,lengths=lengths_val)
+    GT_score /= N
+
+    data = [{'model_name':'Ground truth',
+             'model_id':0,
+             'n_components':GT.n_components,
+             'iterations':GT.monitor_.iter,
+             'self_consistency':GT_SC,
+             'score':GT_score}]
+
+    ls = []
+    for i, n_comp in enumerate(n_components_range):
+        for id in range(reps):
+            model = models[n_comp][id]
+            D_JS, D_JS_shuffled = self_consistency(model, X_val, length, Nsamples=5000)
+
+            score = model.score(X_val, lengths=lengths_val)
+            score /= N
+
+            model_SC = np.mean(D_JS) / (np.mean(D_JS_shuffled) + eps)
+
+            data += [{'model_name':model_name,
+             'model_id':id,
+             'n_components':model.n_components,
+             'iterations':model.monitor_.iter,
+             'self_consistency':model_SC,
+             'score':score}]
+
+    return data
+
+
+def self_consistency(model,X,window_length,Nsamples=10):
+    T = X.shape[0]
+    start_range = np.arange(window_length,T-window_length)
+    relative_range = np.arange(-window_length+1, window_length-1)
+    starts1 = np.random.choice(start_range,size=(Nsamples,))
+    shifts = np.random.choice(relative_range,size=(Nsamples,))
+    starts2 = starts1 + shifts
+
+    #embed_space = np.zeros(window_length*3,)
+    wl = window_length
+
+    all_js_div = []
+    all_js_div_shuffled = []
+
+    for i in range(Nsamples):
+        window1 = X[starts1[i]:starts1[i] + window_length]
+        window2 = X[starts2[i]:starts2[i] + window_length]
+
+        posterior1 = model.score_samples(window1)[1]
+        posterior2 = model.score_samples(window2)[1]
+
+        js_div = jenson_shannon_divergence(
+            embed_in_nans(posterior1, 3 * wl, wl),
+            embed_in_nans(posterior2, 3 * wl, wl + shifts[i])
+        )
+        all_js_div += [js_div]
+
+        j = np.random.choice(Nsamples)
+        window2_shuffled = X[starts2[j]:starts2[j] + window_length]
+
+        posterior2 = model.score_samples(window2_shuffled)[1]
+
+        js_div_shuffled = jenson_shannon_divergence(
+            embed_in_nans(posterior1, 3 * wl, wl),
+            embed_in_nans(posterior2, 3 * wl, wl + shifts[j])
+        )
+        all_js_div_shuffled += [js_div_shuffled]
+
+    return np.array(all_js_div),np.array(all_js_div_shuffled)
+
+def self_consistency2(model,X,window_length,Nsamples=10):
+    """
+    larger start range than self_consistency()
+    """
+    T = X.shape[0]
+
+    start_range = np.arange(0 ,T - window_length)
+    starts1 = np.random.choice(start_range,size=(Nsamples,))
+
+    def s2_range(s,T,window_length):
+        lower = np.maximum(0,s-window_length+1)
+        upper = np.minimum(T-window_length,s+window_length)
+        return (lower,upper)
+    starts2 = np.array([s+np.random.choice(
+        np.arange(*s2_range(s,T,window_length))
+    ) for s in starts1])
+
+    shifts = starts2-starts1
+
+    #embed_space = np.zeros(window_length*3,)
+    wl = window_length
+
+    all_js_div = []
+    all_js_div_shuffled = []
+
+    for i in range(Nsamples):
+        window1 = X[starts1[i]:starts1[i] + window_length]
+        window2 = X[starts2[i]:starts2[i] + window_length]
+
+        posterior1 = model.score_samples(window1)[1]
+        posterior2 = model.score_samples(window2)[1]
+
+        js_div = jenson_shannon_divergence(
+            embed_in_nans(posterior1, 3 * wl, wl),
+            embed_in_nans(posterior2, 3 * wl, wl + shifts[i])
+        )
+        all_js_div += [js_div]
+
+        j = np.random.choice(Nsamples)
+        window2_shuffled = X[starts2[j]:starts2[j] + window_length]
+
+        posterior2 = model.score_samples(window2_shuffled)[1]
+
+        js_div_shuffled = jenson_shannon_divergence(
+            embed_in_nans(posterior1, 3 * wl, wl),
+            embed_in_nans(posterior2, 3 * wl, wl + shifts[j])
+        )
+        # plt.imshow(np.concatenate([embed_in_nans(posterior1, 3 * wl, wl).T,
+        #     embed_in_nans(posterior2, 3 * wl, wl + shifts[j]).T],0))
+        # plt.show()
+        all_js_div_shuffled += [js_div_shuffled]
+
+    return np.array(all_js_div),np.array(all_js_div_shuffled)
+
+
+def self_consistency_over_sliced_data(model,X,X_lengths,window_length):
+    """
+    iterate over X_lengths
+    """
+    c = 0
+    all_js_div,all_js_div_shuffled = [],[]
+    # print('X_lengths',X_lengths)
+    for length in X_lengths:
+        X_slice = X[c:c+length]
+        Nsamples = np.maximum(5,((length-window_length)//window_length))
+        # print('Nsamples',Nsamples)
+        js_div,js_div_shuffled = self_consistency2(model,X_slice,window_length,Nsamples)
+        all_js_div += [js_div]
+        all_js_div_shuffled += [js_div_shuffled]
+        c+=length
+    # print('all_js_div[0]',all_js_div[0])
+    return np.concatenate(all_js_div), np.concatenate(all_js_div_shuffled)
+
 
 def embed_in_nans(window,larger_window_size,start_point):
     window_length,features = window.shape
@@ -151,6 +434,8 @@ def embed_in_nans(window,larger_window_size,start_point):
 
 
 def jenson_shannon_divergence(p1,p2,compute_mean = True):
+    p1 = p1 + 1e-10
+    p2 = p2 + 1e-10
     D_KL1 = np.sum(p1 * (np.log(p1) - np.log(p2)),axis=-1)
     D_KL2 = np.sum(p2 * (np.log(p2) - np.log(p1)),axis=-1)
     D_JS = 0.5 * (D_KL1 + D_KL2)
@@ -301,7 +586,7 @@ def compute_MI_predict_proba(model1,model2,test,window_length):
 
 def compute_entropy_steady_state(model):
     m = model.get_stationary_distribution()
-    return np.sum( - m * np.log(m))
+    return np.sum( - m * np.log(m) )
 
 def compute_posterior_entropy(model,test,window_length):
     hid_predicted = [model.predict_proba(test[i:i+window_length]) for i in range(test.shape[0]//window_length)]
@@ -395,6 +680,9 @@ def compute_data_entropy(observations):
     return -(pmf * np.log(pmf)).sum()
 
 
+def mixed_and_test(model,GT):
+    model.startprob_ = model.get_
+
 
 @hydra.main(version_base='1.3', config_path=CONFIG_PATH, config_name=CONFIG_NAME)
 def main(cfg):
@@ -410,17 +698,39 @@ def main(cfg):
 
     #print(hydra.utils.instantiate(cfg.model))
 
-    train, val, test = hydra.utils.instantiate(cfg.all_data_tuples)
+    train, validation, test = instantiate(cfg.all_data_tuples)
+    if hasattr(cfg,'all_data_tuples2'):
+        train2, validation2, test2 = instantiate(cfg.all_data_tuples2)
+
+    # groundtruth = instantiate(cfg.groundtruth)
+    # groundtruth_test = instantiate(cfg.groundtruth_test)
+    # print('groundtruth',groundtruth.transmat_[0,0],groundtruth.emissionprob_[0,0])
+    # print('groundtruth_test', groundtruth_test.transmat_[0, 0],groundtruth_test.emissionprob_[0,0])
 
     if cfg.run_train:
-        model_partial = hydra.utils.instantiate(cfg.model)
-        lengths = hydra.utils.instantiate(cfg.training_specs.lengths)
-        lengths_val = hydra.utils.instantiate(cfg.training_specs.lengths)
+        model_partial = instantiate(cfg.model)
+        lengths = instantiate(cfg.training_specs.lengths)
+        lengths_val = instantiate(cfg.training_specs.lengths)
         model = model_partial(X_train = train,lengths = lengths)
-        model.fit(X=train,lengths = lengths,X_val = val, lengths_val=lengths_val )
-        if cfg.repeat_fit_without_shift:
-            model.shift_limits = 0
-            model.fit(X=train, lengths=lengths)
+
+
+        if hasattr(cfg,'training_config'):
+            for stage_config in cfg.training_config:
+                if stage_config.set_attrs:
+                    for attr,val in stage_config.set_attrs.items():
+                        setattr(model,attr,val)
+                        print(attr, getattr(model,attr))
+                args = {}
+                for k, v in stage_config.fit_args.items():
+                    args.update({k:eval(v)})
+                # print(args)
+                model.fit(**args)
+        else:
+            model.fit(X=train,lengths = lengths,X_val = validation, lengths_val=lengths_val )
+            if cfg.repeat_fit_without_shift:
+                model.shift_limits = 0
+                model.fit(X=train, lengths=lengths)
+
 
         model_save_path = cfg.model_save_path
         if not os.path.exists(os.path.dirname(model_save_path)):
@@ -431,33 +741,72 @@ def main(cfg):
 
     if cfg.run_analysis:
         if cfg.use_groundtruth_as_model:
-            model = hydra.utils.instantiate(cfg.groundtruth)
-            data = {'model_name': 'Groundtruth',
-                    'model_id': None}
+            model = hydra.utils.instantiate(cfg.groundtruth_test if hasattr(cfg,'groundtruth_test') else cfg.groundtruth)
+            data = {
+                'model_name': 'Groundtruth',
+                'model_id': None,
+                'n_components': model.n_components,
+                'iterations': model.monitor_.iter,
+                'train_trials': cfg.train_trials,
+            }
             results_path = os.path.join(cfg.groundtruth_savepath,'groundtruth')
         else:
             model_save_path = cfg.model_save_path
             with open(model_save_path,'rb') as f:
                 model = pkl.load(f)
-            data = {'model_name': cfg.training_mode_choice,
-                    'model_id': cfg.model_index}
+            data = {
+                'model_name': cfg.model_name,
+                'model_id': cfg.model_index,
+                'n_components': model.n_components,
+                'iterations': model.monitor_.iter,
+                'train_trials': cfg.train_trials,
+            }
 
             results_path = cfg.model_save_path
 
-        if cfg.analysis.compute_test_score_and_SC:
-            test_score,test_model_SC = self_consistency_and_validation_single(model,
-                                                                              (test,[length]*(test.shape[0]//length)),
-                                                                              window_length=length )
+        if cfg.analysis.compute_test_score:
+            # test_score,test_model_SC = self_consistency_and_validation_single(model,
+            #                                                                   #(test[:40], [length] * 2),
+            #                                                                   (test,[length]*(test.shape[0]//length)),
+            #                                                                   window_length=10)
+            test_score = normalised_score(
+                model,
+                (test,[length] * (test.shape[0] // length)),
+            )
+            data.update(
+                {'test_score': test_score}
+            )
+        if cfg.analysis.compute_test2_score:
+            test_score2 = normalised_score(
+                model,
+                (test2,[length] * (test2.shape[0] // length)),
+            )
+            data.update(
+                {'test_score2': test_score2}
+            )
 
-            data.update({'n_components': model.n_components,
-                         'iterations': model.monitor_.iter,
-                         'test_self_consistency': test_model_SC,
-                         'test_score': test_score,
-                         'train_trials': cfg.train_trials})
+        if cfg.analysis.compute_test_SC:
+            test_model_SC = self_consistency_score(
+                model,
+                (test[:700], [length] * (test[:700].shape[0] // length)),
+                window_length=10
+            )
+
+            test_model_SC_modified_pi = self_consistency_score(
+                convert_to_time_invariant(model, cfg.length - 10),
+                (test, [length] * (test.shape[0] // length)),
+                window_length=10
+            )
+            data.update({
+                'test_self_consistency': test_model_SC,
+                'test_self_consistency_modified_pi': test_model_SC_modified_pi,
+            })
 
         if cfg.analysis.compute_train_score_and_SC:
-            train_score, train_model_SC = self_consistency_and_validation_single(model, (train, [length] * (train.shape[0] // length)),
-                                                                               window_length=length)
+            train_score, train_model_SC = self_consistency_and_validation_single(model,
+                                                                                #(train[:40], [length] * 2),
+                                                                                (train,[length]*(train.shape[0]//length)),
+                                                                                 window_length=10)
             data.update({'train_self_consistency': train_model_SC,
                          'train_score': train_score})
 
@@ -526,6 +875,15 @@ def main(cfg):
         print(data)
         DF = pd.DataFrame([data])
         DF.to_csv(save_results_loc, index=False)
+
+# @hydra.main(version_base='1.3', config_path=CONFIG_PATH, config_name=CONFIG_NAME)
+# def main(cfg):
+#     a = 1
+#     #OmegaConf.resolve(cfg)
+#     #print(OmegaConf.to_yaml(cfg))
+#
+#     #hydra.utils.instantiate(cfg.test_variable)
+#     print(eval('a'))
 
 
 if __name__ == '__main__':

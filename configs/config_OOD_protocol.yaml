@@ -1,0 +1,133 @@
+defaults:
+  - config
+  - training_config@training_vanilla: vanilla
+  - training_config@training_augmented: augmented
+  - training_config@training_augmented_with_shift: augmented_with_shift
+  - training_config@training_augmented_with_shift_then_vanilla: augmented_with_shift_then_vanilla
+  - training_config@training_augmented_with_shift_then_vanilla_frozen_te: augmented_with_shift_then_vanilla_frozen_te
+  - training_config@pretrain_vanilla_then_finetuning_emission_vanilla: pretrain_vanilla_then_finetuning_emission_vanilla
+  - training_config@pretrain_augmented_then_finetuning_emission_vanilla: pretrain_augmented_then_finetuning_emission_vanilla
+  - training_config@pretrain_augmented_with_shift_then_finetuning_emission_vanilla: pretrain_augmented_with_shift_then_finetuning_emission_vanilla
+  - model@initialisation: groundtruth_nstate
+  - model@groundtruth2: groundtruth_nstate
+  #- start_probability: start_unif_lower_than_k
+  #- start_probability: bimodal
+  - _self_
+#  - hydra: multirun_ood
+#  - override hydra/launcher: joblib
+
+
+# training_config_choice  : training_augmented_with_shift_then_vanilla
+training_config_choice  : training_vanilla
+# training_config_choice  : pretrain_vanilla_then_finetuning_emission_vanilla
+model_name              : ${training_config_choice}
+training_config         : ${${training_config_choice}}
+use_groundtruth_as_model: true
+
+run_train: false
+run_analysis: true
+
+length        : 20
+train_trials  : 1000
+val_trials    : 1000
+test_trials   : 10000
+
+train_trials2 : 1000
+val_trials2   : 1000
+test_trials2  : 10000
+
+num_pretraining_samples: 10
+
+model_index : 0
+
+#start_probability: null
+#start_probability:
+#  k: 4
+#  total: ${groundtruth.num_hid_states}
+
+groundtruth :
+  num_hid_states : 5
+  num_obs_states : 5
+  seed           : 0
+  #eps            : 0.4
+  eps            : 0.1
+  emission_eps   : 0.6
+  start_prob_dist: null  #${start_probability.array}
+
+groundtruth2 :
+  num_hid_states : 5
+  num_obs_states : 5
+  seed           : 1
+  #eps            : 0.4
+  eps            : 0.1
+  emission_eps   : 0.6
+  start_prob_dist: null  #${start_probability.array}
+
+groundtruth_test:
+  _target_    : utils.copy_attributes
+  from_object : ${groundtruth}
+  to_object   : ${groundtruth2}
+  attributes  :
+    - startprob_
+    - transmat_
+
+
+groundtruth_savepath: all_models_validated_finetuning/state${groundtruth.num_hid_states}_obs${groundtruth.num_obs_states}_eps${groundtruth.eps}_emeps${groundtruth.emission_eps}_GT/ #_start_bimodal
+#model_save_path: ${groundtruth_savepath}/models_traintrials${train_trials}_${training_mode_choice}/ncomp${model.model.n_components}_${model_index}
+model_save_path: ${groundtruth_savepath}models_traintrials${train_trials}_${training_config_choice}/ncomp${model.model.n_components}_${model_index}
+
+#######################
+
+training_mode_choice: vanilla_sliced_mode #sliced_and_augmented_with_small_shifts
+
+
+###### Experiment ########
+
+all_data:
+  _target_  : prepare_model.sample_hmm
+  hmm_model : ${groundtruth}
+  length    : ${length}
+  trials    : ${eval:'(${train_trials}+${val_trials}+${test_trials})'}
+
+all_data_tuples:
+  _target_ : numpy.split
+  ary      : ${all_data}
+  indices_or_sections:
+    - ${eval:'${length} * ${train_trials}'}
+    - ${eval:'${length} * (${train_trials}+${val_trials})'}
+  axis: 0
+
+
+all_data2:
+  _target_  : prepare_model.sample_hmm
+  hmm_model : ${groundtruth_test}
+  length    : ${length}
+  trials    : ${eval:'(${train_trials2}+${val_trials2}+${test_trials2})'}
+
+all_data_tuples2:
+  _target_ : numpy.split
+  ary      : ${all_data2}
+  indices_or_sections:
+    - ${eval:'${length} * ${train_trials2}'}
+    - ${eval:'${length} * (${train_trials2}+${val_trials2})'}
+  axis: 0
+
+
+
+######### Analysis ##########
+analysis:
+  compute_test_score          : true
+  compute_test2_score         : true
+  compute_test_SC             : true
+  compute_train_score         : true
+  compute_train_SC            : false
+  compute_SSent               : false
+  compute_MI_emission         : false
+  compute_MI_trans            : false
+  compute_D_JS_stationary_pi  : false
+  compute_proj                : false
+  compute_svd_hidden          : true
+  compute_MI_models           : false
+  compute_MI_predict_proba    : false
+  compute_posterior_entropy   : false
+  compute_data_entropy        : true

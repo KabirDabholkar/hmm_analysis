@@ -1,0 +1,78 @@
+defaults:
+  - model@groundtruth1: groundtruth_nstate
+  - model@groundtruth2: groundtruth_nstate
+  - model@model: groundtruth_nstate
+  - model@model_large_consistent: groundtruth_nstate
+  - start_probability: start_unif_lower_than_k
+  - _self_
+
+length        : 10
+train_trials  : 6
+val_trials    : 2
+test_trials   : 1000
+
+num_obs_states : 2
+
+groundtruth1 :
+  num_hid_states : 1
+  num_obs_states : ${num_obs_states}
+  seed           : 1
+  eps            : 0.2
+
+groundtruth2 :
+  num_hid_states : 1
+  num_obs_states : ${num_obs_states}
+  seed           : 2
+  eps            : 0.1
+
+model :
+  num_hid_states : ${length}
+  num_obs_states : ${num_obs_states}
+  seed           : 11
+  eps            : 0.0
+  start_prob_dist: ${start_probability.array}
+
+model_large_consistent:
+  num_hid_states : ${length}
+  num_obs_states : ${num_obs_states}
+  seed           : 11
+  eps            : 0.1
+  start_prob_dist: null
+
+start_probability:
+  k: 1
+  total: ${model.num_hid_states}
+
+
+###### Experiment ########
+
+all_data1:
+  _target_  : prepare_model.sample_hmm
+  hmm_model : ${groundtruth1}
+  length    : ${length}
+  trials    : ${eval:'(${train_trials}+${val_trials}+${test_trials})'}
+  seed_base : 0
+
+all_data_tuples1:
+  _target_ : numpy.split
+  ary      : ${all_data1}
+  indices_or_sections:
+    - ${eval:'${length} * ${train_trials}'}
+    - ${eval:'${length} * (${train_trials}+${val_trials})'}
+  axis: 0
+
+
+all_data2:
+  _target_  : prepare_model.sample_hmm
+  hmm_model : ${groundtruth2}
+  length    : ${length}
+  trials    : ${eval:'(${train_trials}+${val_trials}+${test_trials})'}
+  seed_base : 0
+
+all_data_tuples2:
+  _target_ : numpy.split
+  ary      : ${all_data2}
+  indices_or_sections:
+    - ${eval:'${length} * ${train_trials}'}
+    - ${eval:'${length} * (${train_trials}+${val_trials})'}
+  axis: 0

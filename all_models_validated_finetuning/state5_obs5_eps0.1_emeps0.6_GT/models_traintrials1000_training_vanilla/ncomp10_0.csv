@@ -1,0 +1,2 @@
+model_name,model_id,n_components,iterations,train_trials,test_score2,test_self_consistency,test_self_consistency_modified_pi,train_self_consistency,train_score,PR,minus_test_entropy
+training_vanilla,0,10,10,1000,-1.5793331965131472,0.5554992693289975,0.10828733089939155,0.5796744052454472,-1.5848906454888538,3.3125064102793664,-1.6091903688533276
