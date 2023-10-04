@@ -1,2 +1,0 @@
-model_name,model_id,n_components,iterations,test_self_consistency,test_self_consistency_modified_pi,test_score,train_trials,train_self_consistency,train_score,PR,minus_test_entropy
-Groundtruth,,7,0,0.345022822483646,0.03458806174881979,-1.4597763095732108,70,0.3364016003897467,-1.4479872898688826,6.895465477182746,-1.9443726175016012
