@@ -128,35 +128,46 @@ def main(cfg):
     # print('diff GT-model',test2_score_groundtruth2 - test2_score_model, 1/train_trials * (groundtruth2.emissionprob_[0,1]))
     # print('diff GT-consistent model', test2_score_groundtruth2 - test2_score_self_consistent_model, 1/(train_trials*length) * (groundtruth2.emissionprob_[0,0])* (groundtruth2.emissionprob_[0,1]))
 
-    return test2_score_groundtruth2 - test2_score_model, test2_score_groundtruth2 - test2_score_self_consistent_model
+    return test2_score_groundtruth2 - test2_score_model, test2_score_groundtruth2 - test2_score_self_consistent_model, test2_score_groundtruth2 - test2_score_SC_large
 @hydra.main(version_base=None, config_path=CONFIG_PATH, config_name=CONFIG_NAME)
 def main_repeat(cfg):
-    train_trial_range = np.arange(1,27,3)
+    train_trial_range = np.arange(1,27,3)[:]
     repeats = 10
     model_diff_all = []
     SC_model_diff_all = []
+    SC_large_model_diff_all = []
     for i,train_trials in enumerate(train_trial_range[:]):
         model_diff_reps = []
         SC_model_diff_reps = []
+        SC_large_model_diff_reps = []
         for rep in range(repeats)[:]:
             #print(type(cfg.train_trials),cfg.train_trials)
             setattr(cfg,'train_trials',int(train_trials))
             setattr(cfg.all_data1, 'seed_base', i*repeats+100+rep)
             setattr(cfg.all_data2, 'seed_base', i*repeats+10001+rep)
             print(type(cfg.train_trials),cfg.train_trials)
-            model_diff,SC_model_diff = main(cfg)
-            print('scores',model_diff,SC_model_diff)
+            model_diff,SC_model_diff,SC_large_model_diff = main(cfg)
+            print('scores',model_diff,SC_model_diff,SC_large_model_diff)
             model_diff_reps.append(model_diff)
             SC_model_diff_reps.append(SC_model_diff)
+            SC_large_model_diff_reps.append(SC_large_model_diff)
 
         model_diff_all.append(np.array(model_diff_reps))
         SC_model_diff_all.append(np.array(SC_model_diff_reps))
-
-    plt.scatter(train_trial_range, np.nanmean(np.stack(model_diff_all),1),c='C0')
-    plt.scatter(train_trial_range, np.nanmean(np.stack(SC_model_diff_all),1),c='C1')
-    plt.plot(train_trial_range,1 / train_trial_range,ls='dashed',c='C0')
-    plt.plot(train_trial_range, 1 / (train_trial_range*cfg.length), ls='dashed', c='C1')
+        SC_large_model_diff_all.append(np.array(SC_large_model_diff_reps))
+    plt.scatter(train_trial_range, np.nanmean(np.stack(model_diff_all),1),c='C1',label='Chain')
+    plt.scatter(train_trial_range, np.nanmean(np.stack(SC_model_diff_all),1),c='C0',label='Ground truth')
+    plt.scatter(train_trial_range, np.nanmean(np.stack(SC_large_model_diff_all), 1), c='C3', label='Uniform',s=10)
+    plt.plot(train_trial_range,1 / train_trial_range,ls='dashed',c='C1',label=r'$\frac{1}{K}$')
+    plt.plot(train_trial_range, 1 / (train_trial_range*cfg.length), ls='dashed', c='C0',label=r'$\frac{1}{KT}$')
     # plt.yscale('log')
+    plt.ylabel('Average K-shot generalisation error')
+    plt.xlabel(rf'$K$, ($T={cfg.length}$)')
+    plt.legend()
+    plt.xticks(np.arange(0,30,5))
+    plt.ylim(0)
+    plt.xlim(0)
+    plt.savefig('plots/fewshot_generalisation.pdf')
     plt.show()
 
 if __name__ == '__main__':
