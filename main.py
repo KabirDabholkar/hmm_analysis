@@ -18,10 +18,6 @@ CONFIG_PATH = "configs"
 # CONFIG_NAME = "config"
 CONFIG_NAME = "config_OOD_protocol"
 
-OmegaConf.register_new_resolver("eval", eval)
-OmegaConf.register_new_resolver("ind", lambda a,i: a[i])
-OmegaConf.register_new_resolver("listmul", lambda l, i: [l]*i)
-OmegaConf.register_new_resolver("getattr", getattr)
 
 
 def train(model_save_path,train_X_lengths,val_X_lengths,model_n_components=5,n_iter=5,tol=1e-2,shift_sampling_window=None):
@@ -887,6 +883,11 @@ def main(cfg):
 
 
 if __name__ == '__main__':
+    OmegaConf.register_new_resolver("eval", eval)
+    OmegaConf.register_new_resolver("ind", lambda a, i: a[i])
+    OmegaConf.register_new_resolver("listmul", lambda l, i: [l] * i)
+    OmegaConf.register_new_resolver("getattr", getattr)
+
     main()
     #print(specify_groundtruth_state(5,4).transmat_)
     #print(specify_groundtruth().transmat_.sum(1))

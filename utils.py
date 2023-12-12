@@ -10,3 +10,7 @@ def copy_attributes(from_object,to_object,attributes):
             getattr(from_object,attr)
         )
     return to_object
+
+
+
+normalise = lambda x,axis=None: x/x.sum(axis=axis)

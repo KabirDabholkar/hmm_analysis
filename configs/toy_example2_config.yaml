@@ -1,0 +1,30 @@
+defaults:
+  - model@groundtruth : groundtruth_nstate
+  - model@groundtruth3: groundtruth_nstate
+  - model@groundtruth5: groundtruth_nstate
+  - model@groundtruth10: groundtruth_nstate
+  - _self_
+
+groundtruth:
+  num_hid_states : 2
+  num_obs_states : 2
+  seed           : 1
+  eps            : 0
+
+groundtruth3:
+  num_hid_states : 3
+  num_obs_states : 3
+  seed           : 1
+  eps            : 0
+
+groundtruth5:
+  num_hid_states : 5
+  num_obs_states : 5
+  seed           : 1
+  eps            : 0.01
+
+groundtruth10:
+  num_hid_states : 10
+  num_obs_states : 5
+  seed           : 1
+  eps            : 0.01
