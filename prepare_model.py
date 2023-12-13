@@ -110,6 +110,8 @@ class CoHMM():
     def predict(self, X, lengths=None, return_state_proba=False):
         state_proba = self.encoder.predict_proba(X,lengths=lengths)
         rate_pred = self.decoder._generate_rate_from_stateproba(state_proba)
+        rate_pred[rate_pred > 1.0] = 1.0
+        rate_pred[rate_pred < 0.0] = 0.0
         if return_state_proba:
             return rate_pred,state_proba
         return rate_pred
