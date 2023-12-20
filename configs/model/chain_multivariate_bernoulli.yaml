@@ -1,0 +1,42 @@
+_target_: utils.set_attributes
+object:
+  _target_      : hmmlearn.hmm.BernoulliHMM
+  n_components  : ${..n_components}
+
+n_components: 5
+n_features: 20
+transmat_epsilon: 1e-2
+
+transmat_:
+  _target_: utils.empty_call
+  func:
+    _target_: compose.compose
+    _args_:
+      - _target_: utils.normalise
+        _partial_: true
+        axis: 1
+      - ${eval:'lambda x:x+${....transmat_epsilon}'}
+      - _target_: numpy.roll
+        _partial_: true
+        shift: 1
+        axis: 1
+      - _target_: numpy.eye
+        _partial_: true
+        N: ${.....n_components}
+
+lambdas_:
+  _target_: numpy.random.uniform
+  size:
+   - ${...n_components}
+   - ${...n_features}
+
+startprob_:
+  _target_: utils.empty_call
+  func:
+    _target_: compose.compose
+    _args_:
+      - _target_  : utils.normalise
+        _partial_ : true
+      - _target_  : numpy.ones
+        _partial_ : true
+        shape     : ${.....n_components}

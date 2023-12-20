@@ -52,6 +52,10 @@ def specify_groundtruth_state(num_hid_states,num_obs_states,eps=0.4,emission_eps
     return GT
 
 
+def set_epsilon_chain(hmm):
+    hmm.transmat_ = ''
+
+
 def specify_groundtruth():
     GT = CategoricalHMM(n_components=2, init_params="")
     GT.n_features = 2

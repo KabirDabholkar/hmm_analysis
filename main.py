@@ -685,7 +685,6 @@ def main(cfg):
     OmegaConf.resolve(cfg)
     #print(OmegaConf.to_yaml(cfg))
 
-
     length       = cfg.length
     train_trials = cfg.train_trials
     val_trials   = cfg.val_trials
