@@ -1,7 +1,9 @@
 _target_: utils.set_attributes
 object:
-  _target_      : hmmlearn.hmm.BernoulliHMM
+  _target_      : hmm_adapter.BernoulliHMM3d
   n_components  : ${..n_components}
+
+model_name: chain
 
 n_components: 5
 n_features: 20
@@ -23,6 +25,7 @@ transmat_:
       - _target_: numpy.eye
         _partial_: true
         N: ${.....n_components}
+
 
 lambdas_:
   _target_: numpy.random.uniform

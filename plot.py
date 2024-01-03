@@ -5,12 +5,15 @@ from sklearn.utils import check_random_state
 from hmmlearn.hmm import GaussianHMM, CategoricalHMM
 from hmmlearn.vhmm import VariationalCategoricalHMM
 import pickle as pkl
+from typing import Optional
 from functools import partial
 import os
 import seaborn as sns
 import matplotlib as mpl
 mpl.rcParams['text.usetex'] = True
-#mpl.rcParams['text.latex.preamble'] = [r'\usepackage{amsmath}']
+plt.rcParams["font.family"] = "serif"
+plt.rcParams["mathtext.fontset"] = "dejavuserif"
+# mpl.rcParams['text.latex.preamble'] = [r'\usepackage{amsmath}']
 
 # def collater():
 #     #options = [('None',1),(10,1),(10,10)]
@@ -43,8 +46,9 @@ def collater(main_dir = 'all_models_validated_finetuning/state5_obs5_eps0.1_emep
     #options = ['vanilla_sliced_mode','sliced_and_augmented_with_small_shifts']
     #options = ['training_vanilla', 'training_augmented_with_shift', 'training_augmented_with_shift_then_vanilla','training_augmented_with_shift_then_vanilla_frozen_te'] # 'training_augmented'
     #options = ['pretrain_vanilla_then_finetuning_emission_vanilla','pretrain_augmented_with_shift_then_finetuning_emission_vanilla']
-    options = ['training_vanilla']
-    main_path = os.path.join(main_dir,'models_traintrials1000_')
+    # options = ['training_vanilla']
+    options = ['']
+    main_path = os.path.join(main_dir,'models_traintrials500')
     dir_names = [main_path + opt for opt in options]
     #dir_names += ['models_traintrials700_'+'vanilla_sliced_mode']
 
@@ -66,8 +70,8 @@ def collater(main_dir = 'all_models_validated_finetuning/state5_obs5_eps0.1_emep
 
 
 def plot_scatter_with_lines(
-        x: str,
-        y: str,
+        x: Optional[str],
+        y: Optional[str],
         data: pd.DataFrame,
         data_lines: pd.DataFrame,
         save_path,
@@ -81,19 +85,21 @@ def plot_scatter_with_lines(
         hlines=[],
 ):
     fig,ax = plt.subplots()
-    func1(x=x, y=y, hue=hue, data=data, ax=ax, legend=True, alpha=0.6)
+    func1(x=x, y=y, hue=hue, data=data, ax=ax, alpha=0.6)
     if func2:
         func2(x=x,y=y,hue=hue,data = data,ax=ax)
-
-    l = ax.axhline(data_lines[y].values[0], ls='dashed', color='black')
-    l = ax.axvline(data_lines[x].values[0], ls='dashed', color='black')
+    if data_lines is not None:
+        # print('here',data_lines[y].values[0])
+        l = ax.axhline(data_lines[y].values[0], ls='dashed', color='black')
+        l = ax.axvline(data_lines[x].values[0], ls='dashed', color='black')
     ax.set_xlabel(x if xlabel is None else xlabel)
     ax.set_ylabel(y if ylabel is None else ylabel)
     for i,ls in enumerate(hlines):
         ax.axhline(ls,color='C%d'%i,ls='dashed',lw=1)
     handles, labels = ax.get_legend_handles_labels()
-    handles += [l]
-    labels  += ['Ground-truth']
+    if data_lines is not None:
+        handles += [l]
+        labels  += ['Ground-truth']
     ax.legend(handles,labels,fontsize=5,framealpha=0.3)
     ax.set_xlim(*xlim)
     ax.set_ylim(*ylim)
@@ -107,194 +113,424 @@ def plot_scatter_with_lines(
 def main():
     #DF = pd.read_csv('plots/collated.csv',index_col=0)
 
-    DF,main_dir = collater()
+    DF,main_dir = collater(main_dir='all_models_validated_v2/teacher_state9')
     DF = DF.replace(to_replace='Groundtruth',value='Ground truth')
-    print(DF[DF['model_name']=='Ground truth'].n_components)
+    # print(DF[DF['model_name']=='Ground truth'].n_components)
 
     #DF['score'] = DF['test_score']
     #DF.loc[DF.model_name == 'Ground truth', 'test_self_consistency'] = DF.loc[DF.model_name == 'Ground truth', 'test_self_consistency_modified_pi']
-    DF['self_consistency'] = DF['test_self_consistency']
+    if 'test_self_consistency' in DF.columns:
+        DF['self_consistency'] = DF['test_self_consistency']
 
     #sns.scatterplot(data = DF)
-    modelsDF = DF[DF.model_name!='Ground truth']
+    modelsDF = DF[DF.model_name != 'Ground truth']
     modelsGT = DF[DF.model_name == 'Ground truth']
+
     #modelsDF = modelsDF[modelsDF.score>-2.31]
     #modelsDF = modelsDF[modelsDF.score > -1.70]
     #modelsDF = modelsDF[modelsDF.test_score > -1.05]
     #modelsDF = modelsDF[modelsDF.test_score > -2.0]
     #modelsDF = modelsDF[modelsDF.test_score > modelsGT.minus_test_entropy.values[0]]
-
-    print(os.path.join('plots', main_dir, 'test_PR_vs_score.png'))
+    print(modelsDF.columns)
+    print(modelsDF[modelsDF['original co-smoothing']<-5][modelsDF['original co-smoothing']>0.48].n_components)
+    # print(os.path.join('plots', main_dir, 'test_PR_vs_score.png'))
+    # print(DF[DF.model_name == 'Ground truth'])
+    cosmoothing_columns = [c for c in modelsDF.columns if '-shot co-smoothing' in c]
+    # print(modelsDF.pivot(index=['model_id','n_components'],columns=cosmoothing_columns))
+    modelsDF['unique_id'] = modelsDF['model_id'].astype(int).astype(str) + '_' + modelsDF['n_components'].astype(str)
+    modelsDF_ = modelsDF.set_index(['unique_id'])[cosmoothing_columns].T
+    modelsDF_['k'] = modelsDF_.index.str.split('-shot').str[0].astype(int)
+    modelsDF_=modelsDF_.set_index('k')
+    models_k_shot = modelsDF.melt(id_vars=['model_id', 'n_components'], value_vars=cosmoothing_columns, value_name='co-smoothing')
+    models_k_shot = models_k_shot[models_k_shot.variable.str.split(' ').str[0]!='original']
+    models_k_shot['k'] = models_k_shot.variable.str.split('-shot').str[0]
+    models_k_shot['k']  = models_k_shot['k'].apply(lambda x: int(x) if len(x)==1 else x)
+    models_k_shot['unique_id'] = models_k_shot['model_id'].astype(int).astype(str) + '_' + models_k_shot['n_components'].astype(str)
+    print(
+        modelsDF['decoder_student->teacher'] #['co-smoothing']
+        # models_k_shot['n_components'].apply(str).type
+        # models_k_shot['model_id']
+    )
 
     plot_args_list = [
-        # test score
+        # decoding
         {
-            'x'             :'n_components',
-            'y'             :'test_score',
-            'hue'           : 'model_name',
-            'data'          : modelsDF,
-            'data_lines'    : DF[DF.model_name=='Ground truth'],
-            'save_path'     : os.path.join('plots',main_dir,'test_score.png'),
-            'func2'         : sns.lineplot,
-            #'xlim'          : (0, 51),
-            #'ylim'          : [-2.5,-2.2], #-1.625, -1.550],
-            'hlines'        : list(modelsDF.groupby('model_name').test_score.max())
-        },
-        # test2 score
-        {
-            'x': 'n_components',
-            'y': 'test_score2',
-            'hue': 'model_name',
-            'data': modelsDF,
-            'data_lines': DF[DF.model_name == 'Ground truth'],
-            'save_path': os.path.join('plots', main_dir, 'test_score2.png'),
-            'func2': sns.lineplot,
-            # 'xlim'          : (0, 51),
-            # 'ylim'          : [-2.5,-2.2], #-1.625, -1.550],
-            'hlines': list(modelsDF.groupby('model_name').test_score2.max())
-        },
-        # test self consistency
-        {
-            'x': 'n_components',
-            'y': 'self_consistency',
-            'hue': 'model_name',
-            'data': modelsDF,
-            'data_lines': DF[DF.model_name == 'Ground truth'],
-            'save_path': os.path.join('plots', main_dir, 'test_self_consistency.png'),
-            'func2': sns.lineplot,
-            # 'xlim'          : (0, 51),
-            #'ylim': [-1.7, -1.5],
-        },
-        # test self consistency modified pi
-        {
-            'x': 'n_components',
-            'y': 'test_self_consistency_modified_pi',
-            'hue': 'model_name',
-            'data': modelsDF,
-            'data_lines': DF[DF.model_name == 'Ground truth'],
-            'save_path': os.path.join('plots', main_dir, 'test_self_consistency_modified_pi.png'),
-            'func2': sns.lineplot,
-            # 'xlim'          : (0, 51),
-            # 'ylim': [-1.7, -1.5],
-        },
-        # test participation ratio
-        {
-            'x': 'n_components',
-            'y': 'PR',
-            'hue': 'model_name',
-            'data': modelsDF,  # [modelsDF.test_score > -1.62],
-            'data_lines': DF[DF.model_name == 'Ground truth'],
-            'save_path': os.path.join('plots', main_dir, 'test_PR.png'),
-            'func2': sns.lineplot,
-            # 'xlim'          : (0, 51),
-            # 'ylim': [-1.7, -1.5],
-        },
-        # test participation ratio
-        {
-            'x': 'test_score',
-            'y': 'PR',
-            'hue': 'model_name',
-            'data': modelsDF,  # [modelsDF.test_score > -1.62],
-            'data_lines': DF[DF.model_name == 'Ground truth'],
-            'save_path': os.path.join('plots', main_dir, 'test_PR_vs_score.png'),
-            # 'func2': sns.lineplot,
-            # 'xlim' : [-1.625, -1.550],
-            # 'ylim': [-1.7, -1.5],
-        },
-        # test self consistency vs score
-        {
-            'x': 'test_score',
-            'y': 'self_consistency',
-            'hue': 'model_name',
-            'data': modelsDF,
-            'data_lines': DF[DF.model_name == 'Ground truth'],
-            'save_path': os.path.join('plots', main_dir, 'test_self_consistency_vs_score.png'),
-            # 'func2': sns.lineplot,
-            # 'xlim'          : (0, 51),
-            # 'ylim': [-1.7, -1.5],
-        },
-        # test self consistency vs score
-        {
-            'x': 'test_score',
-            'y': 'test_self_consistency_modified_pi',
-            'hue': 'model_name',
-            'data': modelsDF,
-            'data_lines': DF[DF.model_name == 'Ground truth'],
-            'save_path': os.path.join('plots', main_dir, 'self_consistency_modified_pi_vs_score.png'),
-            # 'func2': sns.lineplot,
-            # 'xlim'          : (0, 51),
-            # 'ylim': [-1.7, -1.5],
+            'x': 'original co-smoothing',
+            'y': 'decoder_student->teacher',  # -angular
+            'hue': 'n_components',  # 'unique_id',
+            'data': modelsDF,  # [modelsDF['original co-smoothing'] > (modelsDF['original co-smoothing'].max() - 0.1)],
+            'data_lines': modelsGT,
+            # 'data_lines': None,
+            'save_path': os.path.join('plots', main_dir, 'decoding_studentteacher_vs_originalcosmoothing.png'),
+            # 'func1': partial(sns.lineplot, legend=False, units='unique_id', estimator=None, alpha=0.5, errorbar=None,
+            #                  markers=False),
+            'xlim': (0.0, 0.6),
+            'ylim': (0.0, 0.1),
+            'ylabel': r'student $\mapsto$ teacher',
+            # 'ylabel': r'teacher $\mapsto$ student',
+            # 'hlines': list(modelsDF.groupby('model_name').test_score.max())
         },
 
-        # test D_JS_stationary_pi
+        # decoding
         {
-            'x': 'n_components',
-            'y': 'D_JS_stationary_pi',
-            'hue': 'model_name',
+            'x': 'original co-smoothing',
+            'y': 'decoder_teacher->student',  # -angular
+            'hue': 'n_components',  # 'unique_id',
+            'data': modelsDF,  # [modelsDF['original co-smoothing'] > (modelsDF['original co-smoothing'].max() - 0.1)],
+            'data_lines': modelsGT,
+            # 'data_lines': None,
+            'save_path': os.path.join('plots', main_dir, 'decoding_teacherstudent_vs_originalcosmoothing.png'),
+            # 'func1': partial(sns.lineplot, legend=False, units='unique_id', estimator=None, alpha=0.5, errorbar=None,
+            #                  markers=False),
+            'xlim': (0.0, 0.6),
+            'ylim': (0.0, 0.1),
+            # 'xlabel': r'student $\mapsto$ teacher',
+            'ylabel': r'teacher $\mapsto$ student',
+            # 'hlines': list(modelsDF.groupby('model_name').test_score.max())
+        },
+
+        # decoding
+        {
+            'x': '22-shot co-smoothing',
+            'y': 'decoder_teacher->student',  # -angular
+            'hue': 'n_components',  # 'unique_id',
+            'data': modelsDF [modelsDF['original co-smoothing'] > (modelsDF['original co-smoothing'].max() - 0.1)],
+            'data_lines': modelsGT,
+            # 'data_lines': None,
+            'save_path': os.path.join('plots', main_dir, 'decoding_vs_22shot.png'),
+            # 'func1': partial(sns.lineplot, legend=False, units='unique_id', estimator=None, alpha=0.5, errorbar=None,
+            #                  markers=False),
+            'xlim': (0.0, 0.45),
+            'ylim': (0.0, 0.1),
+            # 'xlabel': r'student $\mapsto$ teacher',
+            'ylabel': r'teacher $\mapsto$ student',
+            # 'hlines': list(modelsDF.groupby('model_name').test_score.max())
+        },
+
+        # decoding
+        {
+            'x': 'decoder_student->teacher',
+            'y': 'decoder_teacher->student',  # -angular
+            'hue': 'n_components',  # 'unique_id',
+            'data': modelsDF,#[modelsDF['original co-smoothing'] > (modelsDF['original co-smoothing'].max() - 0.1)],
+            'data_lines': modelsGT,
+            # 'data_lines': None,
+            'save_path': os.path.join('plots', main_dir, 'decoding.png'),
+            # 'func1': partial(sns.lineplot, legend=False, units='unique_id', estimator=None, alpha=0.5, errorbar=None,
+            #                  markers=False),
+            'xlim': (0.0, 0.1),
+            'ylim': (0.0, 0.1),
+            'xlabel': r'student $\mapsto$ teacher',
+            'ylabel': r'teacher $\mapsto$ student',
+            # 'hlines': list(modelsDF.groupby('model_name').test_score.max())
+        },
+        # k-shot lines
+        {
+            'x': '10-shot co-smoothing',
+            'y': 'decoder_teacher->student',  # -angular
+            'hue': 'n_components',  # 'unique_id',
+            'data': modelsDF[modelsDF['original co-smoothing'] > (modelsDF['original co-smoothing'].max() - 0.1)],
+            'data_lines': modelsGT,
+            # 'data_lines': None,
+            'save_path': os.path.join('plots', main_dir, 'decoding_vs_10shot.png'),
+            # 'func1': partial(sns.lineplot, legend=False, units='unique_id', estimator=None, alpha=0.5, errorbar=None,
+            #                  markers=False),
+            'xlim': (0.0, 0.45),
+            # 'ylim': (0.0, 0.6)
+            # 'hlines': list(modelsDF.groupby('model_name').test_score.max())
+        },
+        {
+            'x': '3-shot co-smoothing',
+            'y': 'decoder_teacher->student',  # -angular
+            'hue': 'n_components',  # 'unique_id',
+            'data': modelsDF[modelsDF['original co-smoothing'] > (modelsDF['original co-smoothing'].max() - 0.1)],
+            'data_lines': modelsGT,
+            # 'data_lines': None,
+            'save_path': os.path.join('plots', main_dir, 'decoding_vs_3shot.png'),
+            # 'func1': partial(sns.lineplot, legend=False, units='unique_id', estimator=None, alpha=0.5, errorbar=None,
+            #                  markers=False),
+            'xlim': (-2.0, 0.45),
+            # 'ylim': (0.0, 0.6)
+            # 'hlines': list(modelsDF.groupby('model_name').test_score.max())
+            'ylabel':'decoder_teacher-student',
+        },
+        # k-shot lines
+        {
+            'x': '22-shot co-smoothing',
+            'y': 'similarity.procrustes', #-angular
+            'hue': 'n_components',  # 'unique_id',
+            'data': modelsDF[modelsDF['original co-smoothing']>(modelsDF['original co-smoothing'].max()-0.1)],
+            # 'data_lines': DF[DF.model_name == 'Ground truth'],
+            'data_lines': None,
+            'save_path': os.path.join('plots', main_dir, 'similarity_vs_22shot.png'),
+            'func2': partial(sns.lineplot, legend=False, units='unique_id', estimator=None, alpha=0.5, errorbar=None,
+                             markers=False),
+            'xlim': (0.0, 0.45),
+            # 'ylim': (0.0, 0.6)
+            # 'hlines': list(modelsDF.groupby('model_name').test_score.max())
+        },
+        # k-shot lines
+        {
+            'x': 'k',
+            'y': 'co-smoothing',
+            'hue': None,#'unique_id',
+            'data': models_k_shot,
+            # 'data_lines': DF[DF.model_name == 'Ground truth'],
+            'data_lines':None,
+            'save_path': os.path.join('plots', main_dir, 'k-shot.png'),
+            'func2': partial(sns.lineplot,legend=False,units='unique_id',estimator=None,alpha=0.5,errorbar=None,markers=False),
+            # 'xlim': (0.0, 0.6),
+            'ylim': (0.0, 0.6)
+            # 'hlines': list(modelsDF.groupby('model_name').test_score.max())
+        },
+        # k shot
+        {
+            'x': 'original co-smoothing',
+            'y': '3-shot co-smoothing',
+            'hue': 'n_components', #'similarity.procrustes',
             'data': modelsDF,
             'data_lines': DF[DF.model_name == 'Ground truth'],
-            'save_path': os.path.join('plots', main_dir, 'test_D_JS_stationary_pi.png'),
-            'func2': sns.lineplot,
-            # 'xlim'          : (0, 51),
-            # 'ylim': [-1.7, -1.5],
+            # 'data_lines':None,
+            'save_path': os.path.join('plots', main_dir, 'v2_original_3shot.png'),
+            # 'func2': partial(sns.scatterplot),
+            'xlim': (0.0, 0.6),
+            'ylim': (-3, 0.6)
+            # 'hlines': list(modelsDF.groupby('model_name').test_score.max())
         },
-        # test Mutual info predicted probability
+        # k shot
         {
-            'x': 'n_components',
-            'y': 'MI_predict_proba',
-            'hue': 'model_name',
-            'data': modelsDF, #[modelsDF.test_score>-1.62],
-            'data_lines': DF[DF.model_name == 'Ground truth'],
-            'save_path': os.path.join('plots', main_dir, 'test_MI_predict_proba.png'),
-            'func2': sns.lineplot,
-            # 'xlim'          : (0, 51),
-            # 'ylim': [-1.7, -1.5],
+            'x': 'original co-smoothing',
+            'y': '10-shot co-smoothing',
+            'hue': 'n_components',
+            'data': modelsDF,
+            'data_lines': modelsGT,
+            # 'data_lines':None,
+            'save_path': os.path.join('plots', main_dir, 'v2_original_10shot.png'),
+            # 'func2': sns.scatterplot,
+            'xlim': (0.0, 0.6),
+            'ylim': (0.0, 0.6)
+            # 'hlines': list(modelsDF.groupby('model_name').test_score.max())
         },
-        # test Mutual info predicted probability versus score
+        # k shot
         {
-            'x': 'MI_predict_proba',
-            'y': 'test_score',
-            'hue': 'model_name',
-            'data': modelsDF, #[modelsDF.test_score>-1.62],
-            'data_lines': DF[DF.model_name == 'Ground truth'],
-            'save_path': os.path.join('plots', main_dir, 'test_MI_predict_proba_versus_score.png'),
-            'func2': None,
-            # 'xlim'          : (0, 51),
-            #'ylim': [-1.625, -1.550],
-        },
-        # test Mutual info predicted probability
-        {
-            'x': 'n_components',
-            'y': 'posterior_entropy',
-            'hue': 'model_name',
-            'data': modelsDF,#[modelsDF.test_score > -1.62],
-            'data_lines': DF[DF.model_name == 'Ground truth'],
-            'save_path': os.path.join('plots', main_dir, 'test_posterior_entropy.png'),
-            'func2': sns.lineplot,
-            # 'xlim'          : (0, 51),
-            # 'ylim': [-1.7, -1.5],
-        },
-        # test Mutual info predicted probability versus score
-        {
-            'x': 'train_score',
-            'y': 'test_score',
-            'hue': 'model_name',
+            'x': 'original co-smoothing',
+            'y': '100-shot co-smoothing',
+            'hue': None,
             'data': modelsDF,
             'data_lines': DF[DF.model_name == 'Ground truth'],
-            'save_path': os.path.join('plots', main_dir, 'test_vs_train_score.png'),
-            'func2': None,
-            # 'xlim'          : (0, 51),
-            # 'ylim': [-1.625, -1.550],
+            # 'data_lines':None,
+            'save_path': os.path.join('plots', main_dir, 'v2_original_100shot.png'),
+            'func2': sns.scatterplot,
+            'xlim': (0.0, 0.6),
+            'ylim': (0.0, 0.6)
+            # 'hlines': list(modelsDF.groupby('model_name').test_score.max())
         },
+        # k shot
+        {
+            'x': '100-shot co-smoothing',
+            'y': '10-shot co-smoothing',
+             'hue': None,
+            'data': modelsDF,
+            'data_lines': DF[DF.model_name == 'Ground truth'],
+            # 'data_lines':None,
+            'save_path': os.path.join('plots', main_dir, 'v2_100shot_3shot.png'),
+            'func2': sns.scatterplot,
+            'xlim'          : (0.0,0.6),
+            'ylim'          : (0.0,0.6)
+            # 'hlines': list(modelsDF.groupby('model_name').test_score.max())
+        },
+        # {
+        #     'x': 'original co-smoothing',
+        #     'y': '10-shot co-smoothing',
+        #     'hue': 'similarity.procrustes',
+        #     'data': modelsDF,
+        #     'data_lines': DF[DF.model_name == 'Ground truth'],
+        #     # 'data_lines':None,
+        #     'save_path': os.path.join('plots', main_dir, 'v2_original_vs_10shot.png'),
+        #     'func2': sns.scatterplot,
+        #     'xlim': (0.0, 0.6),
+        #     'ylim': (0.0, 0.6)
+        #     # 'hlines': list(modelsDF.groupby('model_name').test_score.max())
+        # },
+        # # test score
+        # {
+        #     'x'             :'n_components',
+        #     'y'             :'test_score',
+        #     'hue'           : 'model_name',
+        #     'data'          : modelsDF,
+        #     'data_lines'    : DF[DF.model_name=='Ground truth'],
+        #     'save_path'     : os.path.join('plots',main_dir,'test_score.png'),
+        #     'func2'         : sns.lineplot,
+        #     #'xlim'          : (0, 51),
+        #     #'ylim'          : [-2.5,-2.2], #-1.625, -1.550],
+        #     'hlines'        : list(modelsDF.groupby('model_name').test_score.max())
+        # },
+        # # test2 score
+        # {
+        #     'x': 'n_components',
+        #     'y': 'test_score2',
+        #     'hue': 'model_name',
+        #     'data': modelsDF,
+        #     'data_lines': DF[DF.model_name == 'Ground truth'],
+        #     'save_path': os.path.join('plots', main_dir, 'test_score2.png'),
+        #     'func2': sns.lineplot,
+        #     # 'xlim'          : (0, 51),
+        #     # 'ylim'          : [-2.5,-2.2], #-1.625, -1.550],
+        #     'hlines': list(modelsDF.groupby('model_name').test_score2.max())
+        # },
+        # # test self consistency
+        # {
+        #     'x': 'n_components',
+        #     'y': 'self_consistency',
+        #     'hue': 'model_name',
+        #     'data': modelsDF,
+        #     'data_lines': DF[DF.model_name == 'Ground truth'],
+        #     'save_path': os.path.join('plots', main_dir, 'test_self_consistency.png'),
+        #     'func2': sns.lineplot,
+        #     # 'xlim'          : (0, 51),
+        #     #'ylim': [-1.7, -1.5],
+        # },
+        # # test self consistency modified pi
+        # {
+        #     'x': 'n_components',
+        #     'y': 'test_self_consistency_modified_pi',
+        #     'hue': 'model_name',
+        #     'data': modelsDF,
+        #     'data_lines': DF[DF.model_name == 'Ground truth'],
+        #     'save_path': os.path.join('plots', main_dir, 'test_self_consistency_modified_pi.png'),
+        #     'func2': sns.lineplot,
+        #     # 'xlim'          : (0, 51),
+        #     # 'ylim': [-1.7, -1.5],
+        # },
+        # # test participation ratio
+        # {
+        #     'x': 'n_components',
+        #     'y': 'PR',
+        #     'hue': 'model_name',
+        #     'data': modelsDF,  # [modelsDF.test_score > -1.62],
+        #     'data_lines': DF[DF.model_name == 'Ground truth'],
+        #     'save_path': os.path.join('plots', main_dir, 'test_PR.png'),
+        #     'func2': sns.lineplot,
+        #     # 'xlim'          : (0, 51),
+        #     # 'ylim': [-1.7, -1.5],
+        # },
+        # # test participation ratio
+        # {
+        #     'x': 'test_score',
+        #     'y': 'PR',
+        #     'hue': 'model_name',
+        #     'data': modelsDF,  # [modelsDF.test_score > -1.62],
+        #     'data_lines': DF[DF.model_name == 'Ground truth'],
+        #     'save_path': os.path.join('plots', main_dir, 'test_PR_vs_score.png'),
+        #     # 'func2': sns.lineplot,
+        #     # 'xlim' : [-1.625, -1.550],
+        #     # 'ylim': [-1.7, -1.5],
+        # },
+        # # test self consistency vs score
+        # {
+        #     'x': 'test_score',
+        #     'y': 'self_consistency',
+        #     'hue': 'model_name',
+        #     'data': modelsDF,
+        #     'data_lines': DF[DF.model_name == 'Ground truth'],
+        #     'save_path': os.path.join('plots', main_dir, 'test_self_consistency_vs_score.png'),
+        #     # 'func2': sns.lineplot,
+        #     # 'xlim'          : (0, 51),
+        #     # 'ylim': [-1.7, -1.5],
+        # },
+        # # test self consistency vs score
+        # {
+        #     'x': 'test_score',
+        #     'y': 'test_self_consistency_modified_pi',
+        #     'hue': 'model_name',
+        #     'data': modelsDF,
+        #     'data_lines': DF[DF.model_name == 'Ground truth'],
+        #     'save_path': os.path.join('plots', main_dir, 'self_consistency_modified_pi_vs_score.png'),
+        #     # 'func2': sns.lineplot,
+        #     # 'xlim'          : (0, 51),
+        #     # 'ylim': [-1.7, -1.5],
+        # },
+        #
+        # # test D_JS_stationary_pi
+        # {
+        #     'x': 'n_components',
+        #     'y': 'D_JS_stationary_pi',
+        #     'hue': 'model_name',
+        #     'data': modelsDF,
+        #     'data_lines': DF[DF.model_name == 'Ground truth'],
+        #     'save_path': os.path.join('plots', main_dir, 'test_D_JS_stationary_pi.png'),
+        #     'func2': sns.lineplot,
+        #     # 'xlim'          : (0, 51),
+        #     # 'ylim': [-1.7, -1.5],
+        # },
+        # # test Mutual info predicted probability
+        # {
+        #     'x': 'n_components',
+        #     'y': 'MI_predict_proba',
+        #     'hue': 'model_name',
+        #     'data': modelsDF, #[modelsDF.test_score>-1.62],
+        #     'data_lines': DF[DF.model_name == 'Ground truth'],
+        #     'save_path': os.path.join('plots', main_dir, 'test_MI_predict_proba.png'),
+        #     'func2': sns.lineplot,
+        #     # 'xlim'          : (0, 51),
+        #     # 'ylim': [-1.7, -1.5],
+        # },
+        # # test Mutual info predicted probability versus score
+        # {
+        #     'x': 'MI_predict_proba',
+        #     'y': 'test_score',
+        #     'hue': 'model_name',
+        #     'data': modelsDF, #[modelsDF.test_score>-1.62],
+        #     'data_lines': DF[DF.model_name == 'Ground truth'],
+        #     'save_path': os.path.join('plots', main_dir, 'test_MI_predict_proba_versus_score.png'),
+        #     'func2': None,
+        #     # 'xlim'          : (0, 51),
+        #     #'ylim': [-1.625, -1.550],
+        # },
+        # # test Mutual info predicted probability
+        # {
+        #     'x': 'n_components',
+        #     'y': 'posterior_entropy',
+        #     'hue': 'model_name',
+        #     'data': modelsDF,#[modelsDF.test_score > -1.62],
+        #     'data_lines': DF[DF.model_name == 'Ground truth'],
+        #     'save_path': os.path.join('plots', main_dir, 'test_posterior_entropy.png'),
+        #     'func2': sns.lineplot,
+        #     # 'xlim'          : (0, 51),
+        #     # 'ylim': [-1.7, -1.5],
+        # },
+        # # test Mutual info predicted probability versus score
+        # {
+        #     'x': 'train_score',
+        #     'y': 'test_score',
+        #     'hue': 'model_name',
+        #     'data': modelsDF,
+        #     'data_lines': DF[DF.model_name == 'Ground truth'],
+        #     'save_path': os.path.join('plots', main_dir, 'test_vs_train_score.png'),
+        #     'func2': None,
+        #     # 'xlim'          : (0, 51),
+        #     # 'ylim': [-1.625, -1.550],
+        # },
 
     ]
-    for arg in plot_args_list[:2]:
+    for arg in plot_args_list:
         plot_scatter_with_lines(**arg)
 
     # print(
     #     modelsDF.groupby('model_name').test_score.max() .sort_values(ascending=False)
     #     #
     # )
+
+    save_path = os.path.join('plots',main_dir,'k-shot2.png')
+    fig,ax=plt.subplots()
+    sns.lineplot(data=modelsDF_,ax=ax,legend=False)
+    ax.set_ylim(0,0.6)
+    ax.set_xscale('log')
+    fig.tight_layout()
+    if not os.path.exists(os.path.dirname(save_path)):
+        os.makedirs(os.path.dirname(save_path))
+    fig.savefig(save_path,dpi=200)
+
 
 
 

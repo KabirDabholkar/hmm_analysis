@@ -88,6 +88,7 @@ def bernoulli_neg_log_likelihood(rates, spikes, zero_warning=True):
         rates = rates[~mask]
         spikes = spikes[~mask]
 
+
     assert not np.any(np.isnan(rates)), \
         "neg_log_likelihood: NaN rate predictions found"
 

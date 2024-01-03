@@ -1,12 +1,304 @@
 defaults:
-  - model: chain_multivariate_bernoulli
+  - model@teacher: chain_multivariate_bernoulli
+  - model@student: basic_multivariate_bernoulli
   - _self_
+#  - hydra: multirun_cohmm
+#  - override hydra/launcher: joblib
+use_teacher_as_student: false
+#use_teacher_as_student: true
 
-num_neurons_heldin  : 20
-num_neurons_heldout : 80
+run_train: false
 
-num_neurons_total: ${eval:${num_neurons_heldin}+${num_neurons_heldout}}
+numpy_seed:
+  _target_  : numpy.random.seed
+  seed      : 0
 
-model:
+length        : 10
+train_trials  : 500
+val_trials    : 70
+test_trials   : 100
+
+num_neurons_heldin        : 20
+num_neurons_heldout       : 50
+num_neurons_reallyheldout : 50
+
+neurons_split_indices:
+  - ${num_neurons_heldin}
+  - ${eval:${num_neurons_heldin}+${num_neurons_heldout}}
+
+teacher_save_path: all_models_validated_v2/teacher_state${teacher.n_components}
+student_save_path: ${teacher_save_path}/models_traintrials${train_trials}/ncomp${student.n_components}_${student_name}_id${student_index}
+
+##################
+
+num_neurons_total: ${eval:${num_neurons_heldin}+${num_neurons_heldout}+${num_neurons_reallyheldout}}
+total_trials: ${eval:${train_trials}+${val_trials}+${test_trials}}
+
+teacher:
   n_features: ${num_neurons_total}
+  n_components: 9
 
+student:
+  random_state:
+    _target_: numpy.random.RandomState
+    seed    : ${student_index}
+  n_components: 50
+
+student_index: 1
+
+######## training config
+training_config:
+  - shift_sampling_window: ${eval:${length} - ${.shift_limits}}
+    shift_limits: 3
+  - shift_sampling_window: null
+    shift_limits: 0
+
+student_name: shifts_then_noshifts
+
+
+
+generate_all_data:
+  _target_  : prepare_model.sample_hmm
+  _partial_ : true
+#  hmm_model : ${teacher}
+  length    : ${length}
+  trials    : ${eval:'(${train_trials}+${val_trials}+${test_trials})'}
+  flatten   : false
+
+generate_all_data_with_states:
+  _target_  : prepare_model.sample_hmm
+  _partial_ : true
+#  hmm_model : ${teacher}
+  length    : ${length}
+  trials    : ${eval:'(${train_trials}+${val_trials}+${test_trials})'}
+  flatten   : false
+  return_states: true
+
+
+numpy_to_xarray_with_breakdownlabels:
+  _target_  : utils.MultiSelectDataArray  #xarray.DataArray
+#  data      :
+  _partial_ : true
+  dims      : [trials,time,neurons]
+  coords    :
+    trials_split : ${as_tuple:trials,${eval:${listmul:train,${train_trials}}+
+                                            ${listmul:val,${val_trials}}+
+                                            ${listmul:test,${test_trials}}}}
+    neurons_split : ${as_tuple:neurons,${eval:${listmul:heldin,${num_neurons_heldin}} +
+                       ${listmul:heldout,${num_neurons_heldout}} +
+                       ${listmul:reallyheldout,${num_neurons_reallyheldout}}}}
+
+numpy_to_xarray_with_breakdownlabels_split2:
+  _target_  : utils.MultiSelectDataArray  #xarray.DataArray
+#  data      :
+  _partial_ : true
+  dims      : [trials,time,neurons]
+  coords    :
+    trials_split : ${as_tuple:trials,${eval:${listmul:train,${train_trials}}+
+                                            ${listmul:val,${val_trials}}+
+                                            ${listmul:test,${test_trials}}}}
+    neurons_split : ${as_tuple:neurons,${eval:${listmul:heldin,${num_neurons_heldin}} +
+                       ${listmul:heldout,${num_neurons_heldout}}}}
+#numpy_to_xarray_with_breakdownlabels_instantiated:
+#  _target_: config_utils.instantiate
+#  ${numpy_to_xarray_with_breakdownlabels}
+#  '_convert_' : partial
+
+numpy_to_xarray_with_breakdownlabels_states:
+  _target_  : utils.MultiSelectDataArray  #xarray.DataArray
+#  data      :
+  _partial_ : true
+  dims      : [trials,time,features]
+  coords    :
+    trials_split : ${as_tuple:trials,${eval:${listmul:train,${train_trials}}+
+                                            ${listmul:val,${val_trials}}+
+                                            ${listmul:test,${test_trials}}}}
+
+
+###### Dict config generate ########
+
+hmm_sample_dictmodule:
+  _target_: config_utils.dict_module.DictModule
+  module  : ${generate_all_data}
+  in_keys   : [hmm_model]
+  out_keys  : [data_numpy]
+
+hmm_sample_with_states_dictmodule:
+  _target_: config_utils.dict_module.DictModule
+  module  : ${generate_all_data_with_states}
+  in_keys   : [hmm_model]
+  out_keys  : [data_numpy,states_data_numpy]
+
+dataarray_dictmodule:
+  _target_: config_utils.dict_module.DictModule
+  module  : ${numpy_to_xarray_with_breakdownlabels}
+  in_keys : [[data_numpy,data]]
+  out_keys: [data_xarray]
+
+dataarray_split2_dictmodule:
+  _target_: config_utils.dict_module.DictModule
+  module  : ${numpy_to_xarray_with_breakdownlabels_split2}
+  in_keys : [[data_numpy,data]]
+  out_keys: [data_xarray]
+
+dataarray_states_dictmodule:
+  _target_: config_utils.dict_module.DictModule
+  module  : ${numpy_to_xarray_with_breakdownlabels_states}
+  in_keys : [[states_data_numpy,data]]
+  out_keys: [states_data_xarray]
+
+generate_all_data_dictsequential:
+  _target_: config_utils.dict_module.DictSequential
+  _args_  :
+    - ${hmm_sample_dictmodule}
+    - ${dataarray_dictmodule}
+
+generate_all_data_with_states_dictsequential:
+  _target_: config_utils.dict_module.DictSequential
+  _args_  :
+    - ${hmm_sample_with_states_dictmodule}
+    - ${dataarray_split2_dictmodule}
+    - ${dataarray_states_dictmodule}
+
+
+generate_all_data_dictmodule:
+  _target_: config_utils.dict_module.DictModule
+  module  : ${generate_all_data_dictsequential}
+  in_keys : [hmm_model]
+  out_keys: [[data_xarray,null]]
+
+generate_all_data_with_states_dictmodule:
+  _target_: config_utils.dict_module.DictModule
+  module  : ${generate_all_data_with_states_dictsequential}
+  in_keys : [hmm_model]
+  out_keys: [data_xarray,states_data_xarray]
+
+################
+
+
+#generate_train_val_test_split:
+#  _target_ : numpy.split
+#  _partial_: true
+##  ary      : ${all_data}
+#  indices_or_sections:
+#    - ${eval:'${train_trials}'}
+#    - ${eval:'${train_trials}+${val_trials}'}
+#  axis: 0
+
+
+
+######## Data break-up #######
+breakups_dictmodule:
+  fit:
+    _target_: config_utils.dict_module.DictModule
+    module:
+      _target_: config_utils.dict_module.DictSequential
+      _args_:
+        - _target_: config_utils.dict_module.DictModule
+          module:
+            _target_: utils.select
+            _partial_: true
+            trials_split: train
+            neurons_split: [ heldin,heldout ]
+          in_keys : [[data,obj]]
+          out_keys: [selected_train]
+        - _target_: config_utils.dict_module.DictModule
+          module:
+            _target_: utils.select
+            _partial_: true
+            trials_split: val
+            neurons_split: [ heldin,heldout ]
+          in_keys   : [[data, obj]]
+          out_keys  : [selected_val] #[X_val,lengths_val]
+        - _target_  : config_utils.dict_module.DictModule
+          module    :
+            _target_  : utils.flatten_with_lengths
+            _partial_ : true
+          in_keys   : [[selected_train,array]]
+          out_keys  : [X,lengths]
+        - _target_  : config_utils.dict_module.DictModule
+          module    :
+            _target_  : utils.flatten_with_lengths
+            _partial_ : true
+          in_keys   : [[selected_val,array]]
+          out_keys  : [X_val,lengths_val]
+
+    in_keys : [data]
+    out_keys: [X,lengths,X_val,lengths_val]
+#    out_keys: [selected_train,selected_val]
+
+
+
+breakups:
+  fit:
+    train:
+      trials_split: train
+      neurons_split: [heldin,heldout]
+    val:
+      trials_split: val
+      neurons_split: [heldin,heldout]
+
+  k_shot_fit:
+    input:
+      trials_split: train
+      neurons_split: heldin
+    target:
+      trials_split: train
+      neurons_split: reallyheldout
+
+  k_shot_test:
+    input:
+      trials_split: test
+      neurons_split: heldin
+    target:
+      trials_split: test
+      neurons_split: reallyheldout
+
+  cosmoothing:
+    input:
+      trials_split: test
+      neurons_split: heldin
+    target:
+      trials_split: test
+      neurons_split: heldout
+
+  decoding:
+    fit:
+      input:
+        trials_split  : train
+        neurons_split : heldin
+      states:
+        trials_split  : train
+    test:
+      input:
+        trials_split  : test
+        neurons_split : heldin
+      states:
+        trials_split  : test
+######### Analysis ##########
+
+run_analysis: true
+
+analysis:
+  compute_similarity_metrics  : false
+  compute_k_shot              : false
+  compute_co_smoothing        : false
+  compute_latent_decoding     : true
+
+
+similarity_measures:
+  procrustes:
+    _target_  : similarity.make
+    key       : measure.procrustes
+    interface :
+      fit_score: '__call__'
+  procrustes-angular:
+    _target_  : similarity.make
+    key       : measure.procrustes-angular
+    interface :
+      fit_score: '__call__'
+#  linear_regression:
+#    _target_  : similarity.make
+#    key       : measure.linear_regression
+#    interface :
+#      fit_score: '__call__'

@@ -1,5 +1,6 @@
 from hmmlearn.hmm import GaussianHMM, CategoricalHMM, PoissonHMM
 import numpy as np
+from collections.abc import Iterable
 from sklearn.utils import check_random_state
 
 
@@ -69,18 +70,23 @@ def specify_groundtruth():
     GT.startprob_ = GT.get_stationary_distribution()
     return GT
 
-def sample_hmm(hmm_model,length=40,trials=400,seed_base=0,use_emmision2=False,flatten=True):
+def sample_hmm(hmm_model,length=40,trials=400,seed_base=0,use_emmision2=False,flatten=True, return_states=False):
     if use_emmision2:
         temp_emissionprob_ = hmm_model.emissionprob_
         hmm_model.emissionprob_ = hmm_model.emissionprob2_
-    X = [hmm_model.sample(length,random_state=check_random_state(i+seed_base))[0] for i in range(trials)]
+    X = [hmm_model.sample(length,random_state=check_random_state(i+seed_base)) for i in range(trials)]
+    obs,state = zip(*X)
     if use_emmision2:
         hmm_model.emissionprob_ =  temp_emissionprob_
     #lengths = [x.shape[0] for x in X]
-    X = np.stack(X)
+    obs = np.stack(obs)
+    state = np.stack(state)[...,None]
     if flatten:
-        X = X.flatten()[..., None]
-    return X
+        obs = obs.flatten()[..., None]
+        state = state.flatten()[...,None]
+    if return_states:
+        return obs,state
+    return obs
 
 def cosample_hmm(hmm_model,length=40,trials=400,seed_base=0):
     state = [hmm_model.sample(length, random_state=check_random_state(i + seed_base))[1] for i in range(trials)]
@@ -94,14 +100,29 @@ def cosample_hmm(hmm_model,length=40,trials=400,seed_base=0):
     return (cdf > rng.uniform(size=(*cdf.shape[:2],1))).argmax(axis=-1)[...,None]
 
 
-def split_model_emission(model: PoissonHMM,split_index: int):
+def split_model_emission(model: PoissonHMM,split_indices: Iterable[int]):
     from copy import deepcopy
-    first_half = deepcopy(model)
-    second_half = deepcopy(model)
-    first_half.lambdas_,second_half.lambdas_ = np.split(model.lambdas_,[split_index],axis=-1)
-    first_half.n_features = first_half.lambdas_.shape[-1]
-    second_half.n_features = second_half.lambdas_.shape[-1]
-    return first_half, second_half
+    models = [deepcopy(model) for _ in range(len(split_indices)+1)]
+    all_lambdas = np.split(model.lambdas_,split_indices,axis=-1)
+    for model,lam in zip(models,all_lambdas):
+        model.lambdas_ = lam
+        model.n_features = model.lambdas_.shape[-1]
+    return models
+
+def fuse_model(CoHMM_model):
+    from copy import deepcopy
+    base_model = CoHMM_model.encoder
+    base_model.lambdas_ = np.concatenate([
+        CoHMM_model.encoder.lambdas_,
+        CoHMM_model.decoder.lambdas_
+    ],axis=1)
+    base_model.n_features = CoHMM_model.encoder.n_features+ CoHMM_model.decoder.n_features
+    return base_model
+
+
+
+def refit_decoder(base_model,train_in,train_out):
+    model = deepcopy(base_model)
 
 
 

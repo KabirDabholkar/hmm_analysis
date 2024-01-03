@@ -53,8 +53,6 @@ def main():
     test_data = sample_hmm(groundtruth, length=length, trials=test_trials, seed_base=23454, flatten=False)
 
 
-
-    #
     encoder, decoder = split_model_emission(
         generator_model,
         split_index=n_heldin

@@ -733,7 +733,6 @@ def main(cfg):
         with open(model_save_path,'wb') as f:
             pkl.dump(model,f)
 
-
     if cfg.run_analysis:
         if cfg.use_groundtruth_as_model:
             model = hydra.utils.instantiate(cfg.groundtruth_test if hasattr(cfg,'groundtruth_test') else cfg.groundtruth)
