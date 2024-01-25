@@ -128,7 +128,10 @@ def adapt_hmm_class(base_class,adapted_class_name: str):
 
     def _predict_proba(self, X, lengths=None, mode3d = False):
         X_flat, lengths = flatten_if_mode3d(X, lengths, mode3d)
-        return super(AdaptedHMM,self).predict_proba(X_flat, lengths=lengths)
+        out = super(AdaptedHMM, self).predict_proba(X_flat, lengths=lengths)
+        if mode3d:
+            out = out.reshape(*X.shape[:2],-1)
+        return out
 
     def _co_fit(
             self,

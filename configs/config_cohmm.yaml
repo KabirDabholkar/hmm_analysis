@@ -1,13 +1,34 @@
 defaults:
-  - model@teacher: chain_multivariate_bernoulli
-  - model@student: basic_multivariate_bernoulli
+#  - model@teacher: partial_chain_multivariate_bernoulli
+  - model@teacher: partial_chain_multivariate_poisson
+
+#  - model@teacher: chain_multivariate_bernoulli
+
+#  - model@student: basic_multivariate_bernoulli
+  - model@student: basic_multivariate_poisson
+
+#  - bits_per_spike_func: bernoulli
+  - bits_per_spike_func: poisson
   - _self_
-#  - hydra: multirun_cohmm
-#  - override hydra/launcher: joblib
+  - hydra: multirun_cohmm
+  - override hydra/launcher: joblib
 use_teacher_as_student: false
 #use_teacher_as_student: true
 
-run_train: false
+emission_mode : poisson
+
+run_train     : false
+run_analysis  : true
+
+analysis:
+  compute_similarity_metrics        : false
+  compute_latent_decoding           : false
+  compute_mutual_info               : false
+  compute_latent_decoding_shuffled  : false
+  plot_student_matrices             : false
+  compute_k_shot                    : true
+  compute_co_smoothing              : true
+  compute_latent_decoding_stepwise  : true
 
 numpy_seed:
   _target_  : numpy.random.seed
@@ -26,7 +47,7 @@ neurons_split_indices:
   - ${num_neurons_heldin}
   - ${eval:${num_neurons_heldin}+${num_neurons_heldout}}
 
-teacher_save_path: all_models_validated_v2/teacher_state${teacher.n_components}
+teacher_save_path: all_models_validated_v2/teacher_state${teacher.n_components}_${emission_mode}_partial_eps${teacher.transmat_epsilon}_length${length}
 student_save_path: ${teacher_save_path}/models_traintrials${train_trials}/ncomp${student.n_components}_${student_name}_id${student_index}
 
 ##################
@@ -36,24 +57,26 @@ total_trials: ${eval:${train_trials}+${val_trials}+${test_trials}}
 
 teacher:
   n_features: ${num_neurons_total}
-  n_components: 9
+  n_components: 5
+  transmat_epsilon: 1e-1
 
 student:
   random_state:
     _target_: numpy.random.RandomState
     seed    : ${student_index}
-  n_components: 50
+  n_components: 20
 
-student_index: 1
+student_index: 2
 
-######## training config
-training_config:
-  - shift_sampling_window: ${eval:${length} - ${.shift_limits}}
-    shift_limits: 3
-  - shift_sampling_window: null
-    shift_limits: 0
+####### training config
+#training_config:
+#  - shift_sampling_window: ${eval:${length} - ${.shift_limits}}
+#    shift_limits: 1
+#  - shift_sampling_window: null
+#    shift_limits: 0
 
-student_name: shifts_then_noshifts
+#student_name: shifts_then_noshifts
+student_name: vanilla
 
 
 
@@ -277,13 +300,7 @@ breakups:
         trials_split  : test
 ######### Analysis ##########
 
-run_analysis: true
 
-analysis:
-  compute_similarity_metrics  : false
-  compute_k_shot              : false
-  compute_co_smoothing        : false
-  compute_latent_decoding     : true
 
 
 similarity_measures:

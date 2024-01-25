@@ -110,7 +110,7 @@ def bernoulli_neg_log_likelihood(rates, spikes, zero_warning=True):
     return np.sum(result)
 
 
-def bernoulli_bits_per_spike(rates, spikes):
+def bernoulli_bits_per_spike(rates, spikes, zero_warning=True):
     """Computes bits per spike of rate predictions given spikes.
     Bits per spike is equal to the difference between the log-likelihoods (in base 2)
     of the rate predictions and the null model (i.e. predicting mean firing rate of each neuron)
@@ -128,8 +128,9 @@ def bernoulli_bits_per_spike(rates, spikes):
     float
         Bits per spike of rate predictions
     """
-    nll_model = bernoulli_neg_log_likelihood(rates, spikes)
+    nll_model = bernoulli_neg_log_likelihood(rates, spikes, zero_warning=zero_warning)
     nll_null = bernoulli_neg_log_likelihood(
         np.tile(np.nanmean(spikes, axis=(0, 1), keepdims=True), (spikes.shape[0], spikes.shape[1], 1)), spikes,
-        zero_warning=False)
+        zero_warning=zero_warning
+    )
     return (nll_null - nll_model) / np.nansum(spikes) / np.log(2)

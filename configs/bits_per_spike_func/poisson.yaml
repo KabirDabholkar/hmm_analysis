@@ -1,0 +1,2 @@
+_target_  : nlb_tools.evaluation.bits_per_spike
+_partial_ : true

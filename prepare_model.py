@@ -100,7 +100,7 @@ def cosample_hmm(hmm_model,length=40,trials=400,seed_base=0):
     return (cdf > rng.uniform(size=(*cdf.shape[:2],1))).argmax(axis=-1)[...,None]
 
 
-def split_model_emission(model: PoissonHMM,split_indices: Iterable[int]):
+def split_model_emission(model: PoissonHMM, split_indices: Iterable[int]):
     from copy import deepcopy
     models = [deepcopy(model) for _ in range(len(split_indices)+1)]
     all_lambdas = np.split(model.lambdas_,split_indices,axis=-1)
@@ -111,15 +111,13 @@ def split_model_emission(model: PoissonHMM,split_indices: Iterable[int]):
 
 def fuse_model(CoHMM_model):
     from copy import deepcopy
-    base_model = CoHMM_model.encoder
+    base_model = deepcopy(CoHMM_model.encoder)
     base_model.lambdas_ = np.concatenate([
         CoHMM_model.encoder.lambdas_,
         CoHMM_model.decoder.lambdas_
     ],axis=1)
     base_model.n_features = CoHMM_model.encoder.n_features+ CoHMM_model.decoder.n_features
     return base_model
-
-
 
 def refit_decoder(base_model,train_in,train_out):
     model = deepcopy(base_model)
@@ -135,8 +133,6 @@ class CoHMM():
     def predict(self, X, lengths=None, return_state_proba=False):
         state_proba = self.encoder.predict_proba(X,lengths=lengths)
         rate_pred = self.decoder._generate_rate_from_stateproba(state_proba)
-        rate_pred[rate_pred > 1.0] = 1.0
-        rate_pred[rate_pred < 0.0] = 0.0
         if return_state_proba:
             return rate_pred,state_proba
         return rate_pred
@@ -211,5 +207,15 @@ if __name__ == '__main__':
     # GT = specify_groundtruth_state(10,10,
     #                           start_prob_dist=lambda shape: (np.arange(shape[0])>5).astype(float) )
     test_cohmm()
+    # import matplotlib.pyplot as plt
+    # from utils import indicator_func_to_matrix
+    # plt.imshow(
+    #     # np.expand_dims(np.arange(4),1)==np.expand_dims(np.arange(10)%4,0)
+    #     indicator_func_to_matrix(
+    #         size=(4,10),
+    #         indicator_func=lambda i,j: i == j % 4
+    #     )
+    # )
+    # plt.show()
 
 

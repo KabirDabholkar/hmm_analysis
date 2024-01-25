@@ -27,4 +27,4 @@ groundtruth10:
   num_hid_states : 10
   num_obs_states : 5
   seed           : 1
-  eps            : 0.01
+  eps            : 0.001

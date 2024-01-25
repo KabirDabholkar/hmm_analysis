@@ -120,7 +120,7 @@ def main_old(cfg):
                 test_pred_out = test_pred_out.reshape(test_out_data.array.shape)
                 test_pred_out[np.isnan(test_pred_out)]= 0
                 print('isnan',np.isnan(test_pred_out))
-                co_bps = bernoulli_bits_per_spike(test_pred_out,test_out_data.array)
+                co_bps = bits_per_spike(test_pred_out,test_out_data.array)
                 data[score_name] = co_bps
 
 
@@ -188,7 +188,7 @@ def main(cfg):
                 student.fit(**fit_args)
         else:
             student.fit(**fit_args)
-
+        # print('transmat sum just after training', student.transmat_.sum(-1))
         student_save_path = cfg.student_save_path
         if not os.path.exists(os.path.dirname(student_save_path)):
             os.makedirs(os.path.dirname(student_save_path))
@@ -217,8 +217,6 @@ def main(cfg):
             results_path = os.path.join(cfg.teacher_save_path,'groundtruth')
         else:
             student_save_path = cfg.student_save_path
-            with open(student_save_path,'rb') as f:
-                student = pkl.load(f)
             result_data = {
                 'model_name': cfg.student_name,
                 'model_id': cfg.student_index,
@@ -228,6 +226,25 @@ def main(cfg):
             }
 
             results_path = cfg.student_save_path
+            try:
+                with open(student_save_path,'rb') as f:
+                    student = pkl.load(f)
+            except:
+                keys = cfg.analysis.keys()
+                for key in keys:
+                    cfg.analysis[key] = False
+        bits_per_spike = instantiate(cfg.bits_per_spike_func)
+        if cfg.analysis.plot_student_matrices:
+            fig,ax=plt.subplots()
+            ax.imshow(student.transmat_)
+            fig.savefig('plots/test_plots/student_transmat.png')
+
+            if hasattr(student,'lambda_partiliser_mat_'):
+                fig,ax=plt.subplots()
+                ax.imshow(student.lambda_partiliser_mat_)
+                ax.set_ylabel('ground truth')
+                ax.set_xlabel('intermediate projection')
+                fig.savefig('plots/test_plots/student_partial.png')
 
         if cfg.analysis.compute_similarity_metrics:
             test_student = deepcopy(student)
@@ -262,11 +279,138 @@ def main(cfg):
                 split_indices=instantiate(cfg.neurons_split_indices)[:1]
             )
             split_student = CoHMM(test_student_in,test_student_out)
+            # print('transmat sum',split_student.encoder.transmat_.sum(-1))
             test_pred_out = split_student.predict(data.select(**cfg.breakups.cosmoothing.input),mode3d=True)
             test_pred_out = test_pred_out.reshape(*data.select(**cfg.breakups.cosmoothing.target).shape)
             test_pred_out[np.isnan(test_pred_out)] = 0
-            co_bps = bernoulli_bits_per_spike(test_pred_out, data.select(**cfg.breakups.cosmoothing.target))
+            co_bps = bits_per_spike(test_pred_out, data.select(**cfg.breakups.cosmoothing.target).to_numpy())
             result_data['original co-smoothing'] = co_bps
+            print('original co-smoothing',co_bps)
+
+        if cfg.analysis.compute_mutual_info:
+            print(teacher.n_features, student.n_features)
+            generate_all_data = instantiate(cfg.generate_all_data)
+            teacher_ = split_model_emission(teacher,split_indices=instantiate(cfg.neurons_split_indices)[1:2])[0]
+            student_ = split_model_emission(student, split_indices=instantiate(cfg.neurons_split_indices)[1:2])[0]
+            print('n_features',teacher_.n_features,student_.n_features)
+            print(instantiate(cfg.neurons_split_indices))
+            for model1,model2,result_name in [
+                (teacher_, student_, 'MI_teacher->student'),
+                (student_, teacher_, 'MI_student->teacher')
+            ][:]:
+                all_data = instantiate(cfg.generate_all_data_with_states_dictmodule, _convert_='partial')(
+                    hmm_model=model1)
+                obs, states = all_data['data_xarray'], all_data['states_data_xarray']
+
+                test_model2_in, _ = split_model_emission(model2, split_indices=instantiate(cfg.neurons_split_indices)[0:1])
+                # proba1 = model1.predict_proba(obs.select(**cfg.breakups.decoding.fit.input),mode3d=True)
+                select_obs = obs.select(**cfg.breakups.decoding.fit.input)
+                select_states = states.select(**cfg.breakups.decoding.fit.states)
+                proba = test_model2_in.predict_proba(select_obs, mode3d=True)
+                # def mutual_info(GT_states,inferred_proba,state_values):
+
+                proba = proba.reshape(*select_obs.shape[:2],proba.shape[-1])
+                print('proba shape',proba.shape)
+                time_steps = obs.shape[1]
+                T = np.ones((time_steps,model2.n_components, model1.n_components))
+                prob_xt_is_j = np.zeros((time_steps,model1.n_components))
+                for t in range(time_steps):
+                    for j in range(model1.n_components):
+                        xt_is_j = (select_states[:,t] == j)
+                        if np.any(np.squeeze(xt_is_j)):
+                            T[t, :, j] = proba[np.squeeze(xt_is_j),t,:].mean(axis=0)
+                        prob_xt_is_j[t] = xt_is_j.astype(float).mean()
+
+                joint_prob = (T * prob_xt_is_j[:,None]).mean(0)
+
+                eps= 1e-10
+                # plt.figure()
+                # plt.imshow(T[0])
+                # plt.savefig(f'plots/test_plots/{result_name}T_for_MI.png')
+                MI = (
+                        joint_prob * np.log(
+                            (joint_prob+eps)/(
+                                    (joint_prob.sum(1,keepdims=True)+ eps)*(joint_prob.sum(0,keepdims=True)+ eps )
+                            )
+                        )
+                ).sum()
+                result_data[result_name] = MI
+                # print(result_name,MI)
+
+        if cfg.analysis.compute_latent_decoding_stepwise:
+            print(teacher.n_features, student.n_features)
+            # generate_all_data = instantiate(cfg.generate_all_data)
+            teacher_ = split_model_emission(teacher,split_indices=instantiate(cfg.neurons_split_indices)[1:2])[0]
+            student_ = split_model_emission(student, split_indices=instantiate(cfg.neurons_split_indices)[1:2])[0]
+
+            print('n_features',teacher_.n_features,student_.n_features)
+            print(instantiate(cfg.neurons_split_indices))
+            for model1,model2,result_name in [
+                (teacher_, student_, 'teacher->student'),
+                (student_, teacher_, 'student->teacher')
+            ][:]:
+
+                all_data = instantiate(cfg.generate_all_data_with_states_dictmodule, _convert_='partial')(
+                    hmm_model=model1)
+                obs, states = all_data['data_xarray'], all_data['states_data_xarray']
+
+                test_model2_in, _ = split_model_emission(model2, split_indices=instantiate(cfg.neurons_split_indices)[0:1])
+                # proba1 = model1.predict_proba(obs.select(**cfg.breakups.decoding.fit.input),mode3d=True)
+                proba = test_model2_in.predict_proba(obs.select(**cfg.breakups.decoding.fit.input), mode3d=True)
+
+                T = np.ones((model2.n_components,model1.n_components,cfg.length))
+                counts = np.zeros((model1.n_components,cfg.length))
+                for j in range(model1.n_components):
+                    # select_idx = np.reshape((states.select(**cfg.breakups.decoding.fit.states)==j).values,-1)
+                    # print(proba.dtype,proba.shape)
+                    # T[:,j] = proba[select_idx].sum(0)
+                    state_is_j = (states.select(**cfg.breakups.decoding.fit.states)==j).values[...,0]
+                    # print(select_idx_per_t.shape,proba.shape,obs.select(**cfg.breakups.decoding.fit.input).shape)
+                    # trials_where_state_is_j,t_where_state_is_j = np.where(state_is_j)
+                    for t in range(cfg.length):
+                        T[:,j,t] = proba[state_is_j[:,t],t,:].sum(0)
+                        counts[j,t] += state_is_j[:,t].sum()
+                T[np.isnan(T)] = 1
+                T[np.isinf(T)] = 1
+                T = normalise(T,axis=0)
+                counts = normalise(counts,axis=0)
+
+                eps = 1e-9
+
+                D_KLs = (T[..., None] * (np.log(T[..., None] + eps)-np.log(T[..., None, :]+eps))).sum(0) # (model1.n_components,cfg.length,cfg.length)
+                weights = (counts[:,None,:] * counts[:,:,None])                         # (model1.n_components,cfg.length,cfg.length)
+                weighted_D_KLs = (weights * D_KLs).sum(0)
+                mean_D_KL = weighted_D_KLs.mean()
+                print('consistency_'+result_name,mean_D_KL)
+                result_data['consistency_'+result_name] = mean_D_KL
+                #
+                # fig,axs = plt.subplots(2,3,sharey=True,sharex=True)
+                # for t in range(len(axs.flatten())):
+                #     import scipy
+                #     axs.flatten()[t].imshow(
+                #         T[:,:,t]
+                #     )
+                #     # axs.flatten()[t].imshow(np.log(T[:, :, t]))
+                # fig.savefig(f'plots/test_plots/T_{result_name}.png')
+                # plt.close(fig)
+
+                # fig, axs = plt.subplots(3, 5, sharey=True, sharex=True)
+                # vmin = weighted_D_KLs.min()
+                # vmax = weighted_D_KLs.max()
+                # for i in range(len(axs.flatten())):
+                #
+                #     axs.flatten()[i].imshow(
+                #         weighted_D_KLs,vmin=vmin,vmax=vmax,
+                #     )
+                #     # axs.flatten()[t].imshow(np.log(T[:, :, t]))
+                # fig.savefig(f'plots/test_plots/D_KL_{result_name}.png')
+                # plt.close(fig)
+
+                # fig,ax = plt.subplots()
+                # ax.plot(counts)
+                # fig.savefig('plots/test_plots/counts.png')
+                # plt.close(fig)
+
 
         if cfg.analysis.compute_latent_decoding:
             print(teacher.n_features, student.n_features)
@@ -276,8 +420,8 @@ def main(cfg):
             print('n_features',teacher_.n_features,student_.n_features)
             print(instantiate(cfg.neurons_split_indices))
             for model1,model2,result_name in [
-                (teacher_, student_, 'decoder_teacher->student'),
-                (student_, teacher_, 'decoder_student->teacher')
+                (teacher_, student_, 'teacher->student'),
+                (student_, teacher_, 'student->teacher')
             ][:]:
                 # cfg.generate_all_data_dictmodule
                 # obs,states = generate_all_data(model1,return_states=True)
@@ -292,6 +436,118 @@ def main(cfg):
                 all_data = instantiate(cfg.generate_all_data_with_states_dictmodule, _convert_='partial')(
                     hmm_model=model1)
                 obs, states = all_data['data_xarray'], all_data['states_data_xarray']
+
+                test_model2_in, _ = split_model_emission(model2, split_indices=instantiate(cfg.neurons_split_indices)[0:1])
+                # proba1 = model1.predict_proba(obs.select(**cfg.breakups.decoding.fit.input),mode3d=True)
+                proba = test_model2_in.predict_proba(obs.select(**cfg.breakups.decoding.fit.input), mode3d=True)
+
+                T = np.ones((model2.n_components,model1.n_components))
+                for j in range(model1.n_components):
+                    select_idx = np.reshape((states.select(**cfg.breakups.decoding.fit.states)==j).values,-1)
+                    # print(proba.dtype,proba.shape)
+                    T[:,j] = proba[select_idx].sum(0)
+
+                T = normalise(T,axis=0)
+
+
+
+                ### testing ####
+                # test_model1_in, _ = split_model_emission(model1, split_indices=instantiate(cfg.neurons_split_indices)[0:1])
+                # proba1 = test_model1_in.predict_proba(obs.select(**cfg.breakups.decoding.test.input),mode3d=True)
+                # proba2 = test_model2_in.predict_proba(obs.select(**cfg.breakups.decoding.test.input),mode3d=True)
+                #
+                # num_samples = proba2.shape[0]
+                # M = (proba2.T @ proba1) / num_samples
+                #
+                eps = 1e-8
+                # test_loglikelihood = (np.log(M+eps) * T).sum()
+                # result_data[result_name] = test_loglikelihood
+
+                proba = test_model2_in.predict_proba(obs.select(**cfg.breakups.decoding.test.input), mode3d=True)
+
+                T_test = np.ones((model2.n_components,model1.n_components))
+
+                counts_ = np.bincount(
+                    states.select(
+                        **cfg.breakups.decoding.test.states
+                    ).values.flatten()
+                )
+
+                counts = np.zeros(model1.n_components)
+                counts [:counts_.shape[0]] = counts_
+                counts = normalise(counts+eps)
+
+                mean_div = 0
+                for j in range(model1.n_components):
+                    select_idx = np.reshape((states.select(**cfg.breakups.decoding.test.states)==j).values,-1)
+                    # print(proba.dtype,proba.shape)
+                    # T_test[:,j] = normalise( proba[select_idx].sum(0) + eps )
+                    select_proba = proba[select_idx]
+
+                    if select_proba.shape[0]>0:
+                        mean_div += jenson_shannon_divergence(
+                            # T[:,j],
+                            #T_test[:, j]
+                            select_proba+eps,
+                            T_test[None,:, j]
+                        ).mean() * counts[j]
+
+                # test_d_js = (np.log(T + eps) * T_test).sum()
+
+                result_data['decoder_'+result_name] = mean_div
+                print(result_name , mean_div)
+
+
+                mean_D_KL = (counts[None,:] * counts[:,None] * (T[:,None,:] * np.log(T[:,None,:]/T[:,:,None]+eps)).sum(0)).sum()
+                print('consistency_'+result_name,mean_D_KL)
+                result_data['consistency_'+result_name] = mean_D_KL
+
+                # fig,ax = plt.subplots()
+                # ax.imshow(T)
+                # fig.savefig('plots/test_plots/T.png')
+                # plt.close(fig)
+                #
+                # fig,ax = plt.subplots()
+                # ax.plot(counts)
+                # fig.savefig('plots/test_plots/counts.png')
+                # plt.close(fig)
+                #
+                # fig,axs = plt.subplots(1,3)
+                # im = axs[0].imshow(T_test,vmin=0)
+                # fig.colorbar(im, ax=axs[0],shrink=0.7)
+                # im = axs[1].imshow(T, vmin=0)
+                # fig.colorbar(im,ax=axs[1],shrink=0.7)
+                # axs[2].plot(counts)
+                # fig.tight_layout()
+                # plt.savefig(f'plots/test_plots/T_Ttest{result_name}.png')
+
+        if cfg.analysis.compute_latent_decoding_shuffled:
+            print(teacher.n_features, student.n_features)
+            generate_all_data = instantiate(cfg.generate_all_data)
+            teacher_ = split_model_emission(teacher,split_indices=instantiate(cfg.neurons_split_indices)[1:2])[0]
+            student_ = split_model_emission(student, split_indices=instantiate(cfg.neurons_split_indices)[1:2])[0]
+            print('n_features',teacher_.n_features,student_.n_features)
+            print(instantiate(cfg.neurons_split_indices))
+            for model1,model2,result_name in [
+                (teacher_, student_, 'decoder_teacher->student shuffled'),
+                (student_, teacher_, 'decoder_student->teacher shuffled')
+            ][:]:
+                # cfg.generate_all_data_dictmodule
+                # obs,states = generate_all_data(model1,return_states=True)
+
+                # obs = instantiate(cfg.numpy_to_xarray_with_breakdownlabels,_convert_='partial')(
+                #     obs #[:,:,:]
+                # )
+                # # obs = obs.select(neurons_split=['heldin','heldout'])
+                # states = instantiate(cfg.numpy_to_xarray_with_breakdownlabels_states,_convert_='partial')(
+                #     states[...,0]
+                # )
+                all_data = instantiate(cfg.generate_all_data_with_states_dictmodule, _convert_='partial')(
+                    hmm_model=model1)
+                obs, states = all_data['data_xarray'], all_data['states_data_xarray']
+
+                obs = obs[np.random.permutation(obs.shape[0]),np.random.permutation(obs.shape[1])]
+                states = states[np.random.permutation(states.shape[0]), np.random.permutation(states.shape[1])]
 
                 test_model2_in, _ = split_model_emission(model2, split_indices=instantiate(cfg.neurons_split_indices)[0:1])
                 # proba1 = model1.predict_proba(obs.select(**cfg.breakups.decoding.fit.input),mode3d=True)
@@ -331,71 +587,106 @@ def main(cfg):
 
                 counts = np.zeros(model1.n_components)
                 counts [:counts_.shape[0]] = counts_
-                counts = normalise(counts)
+                counts = normalise(counts+eps)
 
                 mean_div = 0
                 for j in range(model1.n_components):
                     select_idx = np.reshape((states.select(**cfg.breakups.decoding.test.states)==j).values,-1)
                     # print(proba.dtype,proba.shape)
-                    T_test[:,j] = normalise( proba[select_idx].sum(0) )
+                    # T_test[:,j] = normalise( proba[select_idx].sum(0) + eps )
+                    select_proba = proba[select_idx]
 
-                    mean_div += jenson_shannon_divergence(
-                        T[:,j],
-                        T_test[:, j]
-                    ) * counts[j]
+                    if select_proba.shape[0]>0:
+                        mean_div += jenson_shannon_divergence(
+                            # T[:,j],
+                            #T_test[:, j]
+                            select_proba+eps,
+                            T_test[None,:, j]
+                        ).mean() * counts[j]
 
                 # test_d_js = (np.log(T + eps) * T_test).sum()
 
                 result_data[result_name] = mean_div
 
-                # fig,axs = plt.subplots(1,2)
+                print(result_name , mean_div)
+                #
+                # fig,axs = plt.subplots(1,3)
                 # im = axs[0].imshow(T_test,vmin=0)
                 # fig.colorbar(im, ax=axs[0],shrink=0.7)
                 # im = axs[1].imshow(T, vmin=0)
                 # fig.colorbar(im,ax=axs[1],shrink=0.7)
-                # plt.savefig('plots/test_plots/T_Ttest.png')
+                # axs[2].plot(counts)
+                # fig.tight_layout()
+                # plt.savefig(f'plots/test_plots/T_Ttest{result_name}.png')
+
 
 
         if cfg.analysis.compute_k_shot:
             K_range = np.logspace(0.5,2,15).astype(int)
+            repeats = cfg.train_trials//K_range//2
+            print(repeats)
             test_students = []
-            for k in K_range:
-                test_student = deepcopy(student)
-                test_student_in, test_student_reallyout = split_model_emission(test_student, split_indices=instantiate(cfg.neurons_split_indices)[0:1])
-                test_student = CoHMM(test_student_in, test_student_reallyout)
+            for i,k in enumerate(K_range):
+                save_repeats = []
+                for rep in range(repeats[i]):
+                    test_student = deepcopy(student)
+                    test_student_in, test_student_reallyout = split_model_emission(test_student, split_indices=instantiate(cfg.neurons_split_indices)[0:1])
+                    test_student = CoHMM(test_student_in, test_student_reallyout)
 
-                test_student.decoder.lambdas_ = np.zeros((test_student.decoder.n_components,cfg.num_neurons_reallyheldout))
-                test_student.decoder.n_features = cfg.num_neurons_reallyheldout
-                select_k_idx = np.random.choice(cfg.train_trials, size=k, replace=False)
+                    test_student.decoder.lambdas_ = np.zeros((test_student.decoder.n_components,cfg.num_neurons_reallyheldout))
+                    test_student.decoder.n_features = cfg.num_neurons_reallyheldout
+                    select_k_idx = np.random.choice(cfg.train_trials, size=k, replace=False)
 
-                test_student.decoder.params = 'l'
+                    test_student.decoder.params = 'l'
 
-                test_student.co_fit(
-                    data.select(**cfg.breakups.k_shot_fit.input) [select_k_idx]()['X'],
-                    data.select(**cfg.breakups.k_shot_fit.target)[select_k_idx]()['X'],
-                    lengths=data.select(**cfg.breakups.k_shot_fit.input) [select_k_idx]()['lengths']
-                )
-                test_student = fuse_model(test_student)
-                test_students.append(test_student)
+                    test_student.co_fit(
+                        data.select(**cfg.breakups.k_shot_fit.input) [select_k_idx]()['X'],
+                        data.select(**cfg.breakups.k_shot_fit.target)[select_k_idx]()['X'],
+                        lengths=data.select(**cfg.breakups.k_shot_fit.input) [select_k_idx]()['lengths']
+                    )
+                    test_student = fuse_model(test_student)
+                    # save_repeats.append(test_student)
+
+                    ## scoring
+                    mod = test_student
+                    (
+                        mod_in,
+                        mod_out,
+                        mod_reallyout
+                    ) = split_model_emission(mod, split_indices=instantiate(cfg.neurons_split_indices))
+
+                    split_student = CoHMM(mod_in, mod_out)
+
+                    # test_in_data, test_out_data, test_reallyout_data = test_data.split(cfg.neurons_split_indices,axis=-1)
+
+                    test_pred_out = split_student.predict(**data.select(**cfg.breakups.k_shot_test.input)())
+                    test_pred_out = test_pred_out.reshape(*data.select(**cfg.breakups.k_shot_test.target).shape)
+                    test_pred_out[np.isnan(test_pred_out)] = 0
+                    co_bps = bits_per_spike(test_pred_out, data.select(**cfg.breakups.k_shot_test.target).to_numpy())
+                    save_repeats.append(co_bps)
+                score_name = f'{k}-shot co-smoothing'
+                result_data[score_name] = sum(save_repeats)/len(save_repeats)
+
+                test_students.append(save_repeats)
 
             # score_names = ['co-smoothing']+[f'{k}-shot co-smoothing' for k in K_range]
-            score_names = [f'{k}-shot co-smoothing' for k in K_range]
-            for score_name, mod in zip(score_names,test_students):
-                (
-                    mod_in,
-                    mod_out,
-                    mod_reallyout
-                ) = split_model_emission(mod,split_indices=instantiate(cfg.neurons_split_indices))
-
-                split_student = CoHMM(mod_in, mod_out)
-
-                # test_in_data, test_out_data, test_reallyout_data = test_data.split(cfg.neurons_split_indices,axis=-1)
-
-                test_pred_out = split_student.predict(**data.select(**cfg.breakups.k_shot_test.input)())
-                test_pred_out = test_pred_out.reshape(*data.select(**cfg.breakups.k_shot_test.target).shape)
-                test_pred_out[np.isnan(test_pred_out)] = 0
-                co_bps = bernoulli_bits_per_spike(test_pred_out,data.select(**cfg.breakups.k_shot_test.target))
-                result_data[score_name] = co_bps
+            # score_names = [f'{k}-shot co-smoothing' for k in K_range]
+            # for score_name, mod in zip(score_names,test_students):
+            #     (
+            #         mod_in,
+            #         mod_out,
+            #         mod_reallyout
+            #     ) = split_model_emission(mod,split_indices=instantiate(cfg.neurons_split_indices))
+            #
+            #     split_student = CoHMM(mod_in, mod_out)
+            #
+            #     # test_in_data, test_out_data, test_reallyout_data = test_data.split(cfg.neurons_split_indices,axis=-1)
+            #
+            #     test_pred_out = split_student.predict(**data.select(**cfg.breakups.k_shot_test.input)())
+            #     test_pred_out = test_pred_out.reshape(*data.select(**cfg.breakups.k_shot_test.target).shape)
+            #     test_pred_out[np.isnan(test_pred_out)] = 0
+            #     co_bps = bernoulli_bits_per_spike(test_pred_out,data.select(**cfg.breakups.k_shot_test.target))
+            #     result_data[score_name] = co_bps
 
         # results_path = os.path.join(cfg.teacher_save_path, 'groundtruth')
         save_results_loc = results_path + '.csv'

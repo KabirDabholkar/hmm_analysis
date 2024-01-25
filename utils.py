@@ -3,6 +3,15 @@ from copy import deepcopy
 from typing import Union
 import xarray as xr
 from collections.abc import Iterable
+import numpy as np
+
+def indicator_func_to_matrix(size,indicator_func,dtype=bool):
+    A = np.zeros(size)
+    for i in range(size[0]):
+        for j in range(size[1]):
+            A[i,j] = indicator_func(i,j)
+    return A.astype(dtype)
+
 
 def duplicate_list(item,repeats):
     return [item] * repeats
@@ -111,7 +120,7 @@ def make_hmm_xarray(array):
 #     return np.split(self,indices,axis=axis)
 
 
-normalise = lambda array,axis=None: array/array.sum(axis=axis)
+normalise = lambda array,axis=None: array/array.sum(axis=axis,keepdims=True)
 
 
 if __name__ == '__main__':

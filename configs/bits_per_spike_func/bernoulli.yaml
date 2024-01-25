@@ -1,0 +1,3 @@
+_target_  : metrics.bernoulli_bits_per_spike
+_partial_ : true
+zero_warning  : false

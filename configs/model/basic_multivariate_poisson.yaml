@@ -1,0 +1,3 @@
+_target_      : hmm_adapter.PoissonHMM3d
+n_components  : 5
+n_iter        : 100

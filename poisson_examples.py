@@ -55,7 +55,7 @@ def main():
 
     encoder, decoder = split_model_emission(
         generator_model,
-        split_index=n_heldin
+        split_index=[n_heldin]
     )
     decoder.params = 'l'
 
@@ -139,6 +139,9 @@ def main():
     # plt.show()
 
 
+def compute_joint_prob(prob_b_given_a,prob_a):
+    return prob_b_given_a * prob_a[None,:]
+
 
 
 def main():
@@ -169,7 +172,7 @@ def main():
 
     encoder, decoder = split_model_emission(
         generator_model,
-        split_index=n_heldin
+        split_indices=n_heldin
     )
     decoder.params = 'l'
 
@@ -304,6 +307,8 @@ def main():
         # ax_row[i].imshow(mod.emissionprob2_,vmin=0,vmax=1)
         sns.heatmap(mod.decoder.lambdas_, vmin=0, vmax=1, annot=True, fmt=fmt, ax=ax_row[i], cbar=False,square=True)
         ax_row[0].set_ylabel(r'$\hat B^{out}$',fontsize=fontsize)
+
+        # ax_row[i].scatter
     fig.tight_layout()
     fig.savefig('plots/test_plots/three_models.png',dpi=200)
     fig.savefig('plots/test_plots/three_models.pdf')
@@ -341,7 +346,7 @@ def main():
 
     encoder, decoder = split_model_emission(
         generator_model,
-        split_index=n_heldin
+        split_indices=[n_heldin]
     )
     decoder.params = 'l'
 
@@ -605,6 +610,82 @@ def main():
     plt.close()
 
 
+def test_main():
+    np.random.seed(0)
+    length = 10
+    train_trials = 5
+    K_range = np.logspace(0.5,3,15).astype(int)
+    test_trials = 500
+
+    n_components = 5
+    n_heldin = 20
+    n_heldout = 100
+    trans_eps = 1e-2
+    power_squeeze = 1
+    frac_perm = 0.4
+
+    generate_plots = False
+    annot = False
+
+    generator_model = BernoulliHMM(n_components=n_components)
+    generator_model.n_features = n_heldin + n_heldout
+    generator_model.lambdas_ = np.random.uniform(size=(n_components,n_heldin+n_heldout))**power_squeeze
+    generator_model.startprob_ = normalise(np.ones(n_components))
+    generator_model.transmat_ = normalise(np.roll(np.eye(n_components) + trans_eps,1,axis=1),axis=1)
+    groundtruth = generator_model
+
+    train_data = sample_hmm(groundtruth, length=length, trials=train_trials, seed_base=2, flatten=False)
+    test_data = sample_hmm(groundtruth, length=length, trials=test_trials, seed_base=23454, flatten=False)
+
+    # plt.imshow(test_data[0].T)
+    # plt.show()
+
+    encoder, decoder = split_model_emission(
+        generator_model,
+        split_indices=[n_heldin]
+    )
+    decoder.params = 'l'
+
+    model = CoHMM(
+        encoder=encoder,
+        decoder=decoder,
+    )
+
+    A = normalise(model.encoder.transmat_.T,axis=1)
+    # A = normalise(np.diag(np.arange(n_components)<1)+0.2,axis=1)
+    proba = complete_latent_proba(4,length,A=A,pi=model.encoder.startprob_)
+    print(proba.sum(axis=0))
+    plt.figure()
+    plt.imshow(np.log(proba[:,2,:]))
+    plt.savefig('plots/test_plots/proba.png')
+
+    print(generator_model.lambdas_.shape)
+
+def complete_latent_proba(t,T,A,pi):
+    n_components = A.shape[0]
+    print(A)
+    proba = np.zeros((n_components,n_components,T))
+    # for j in range(n_components):
+    #     for i in range(n_components):
+    for s in range(T):
+        if s==t:
+            proba[...,s] = np.eye(n_components)
+        elif s>t:
+            proba[..., s] = np.linalg.matrix_power(A,s-t)
+        else: # s<t
+            forward = np.linalg.matrix_power(A,t-s)
+            prob_s = pi @ np.linalg.matrix_power(A,s)
+            bayes_backward = normalise(forward.T * prob_s[:,None],axis=1)
+            proba[..., s] = bayes_backward
+    return proba
+
+
+
+
+
+
+
 
 if __name__ == '__main__':
-    main()
+    # main()
+    test_main()

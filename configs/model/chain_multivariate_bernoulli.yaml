@@ -26,7 +26,6 @@ transmat_:
         _partial_: true
         N: ${.....n_components}
 
-
 lambdas_:
   _target_: numpy.random.uniform
   size:
@@ -43,3 +42,14 @@ startprob_:
       - _target_  : numpy.ones
         _partial_ : true
         shape     : ${.....n_components}
+#      - ${eval:'lambda x:(x<=5)+5e-2'}
+#      - _target_  : numpy.arange
+#        _partial_ : true
+#        stop      : ${.....n_components}
+#      - _target_: numpy.concatenate
+#        _partial_: true
+#        arrays  :
+#          - _target_: numpy.ones
+#            shape     : 5
+#          - _target_: numpy.zeros
+#            shape     : ${eval:${.....n_components})-5}
