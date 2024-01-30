@@ -16,10 +16,14 @@ from metrics import bernoulli_bits_per_spike
 from hmm_adapter import CoHMM3d as CoHMM
 
 import matplotlib as mpl
+mpl.rcParams['text.usetex'] = True
+plt.rcParams["font.family"] = "serif"
+plt.rcParams["mathtext.fontset"] = "dejavuserif"
+mpl.rcParams['text.latex.preamble'] = r'\usepackage{amsmath}'
 
 import prepare_model
 
-mpl.rcParams['text.usetex'] = True
+
 
 CONFIG_PATH = "configs"
 # CONFIG_NAME = "config"
@@ -238,6 +242,10 @@ def main(cfg):
             fig,ax=plt.subplots()
             ax.imshow(student.transmat_)
             fig.savefig('plots/test_plots/student_transmat.png')
+
+            fig,ax=plt.subplots()
+            ax.imshow(student.lambdas_)
+            fig.savefig('plots/test_plots/student_lambdas.png')
 
             if hasattr(student,'lambda_partiliser_mat_'):
                 fig,ax=plt.subplots()
@@ -687,6 +695,192 @@ def main(cfg):
             #     test_pred_out[np.isnan(test_pred_out)] = 0
             #     co_bps = bernoulli_bits_per_spike(test_pred_out,data.select(**cfg.breakups.k_shot_test.target))
             #     result_data[score_name] = co_bps
+
+        if cfg.analysis.compute_fisher_info_matrix:
+            import jax.numpy as jnp
+
+
+            from hmm_fisher_info import (
+                bernoulli_loglikelihood_loss,
+                batch_bernoulli_loglikelihood_loss,
+                compute_bernoulli_MLE,
+                batch_compute_bernoulli_MLE,
+                batch_batch_bernoulli_loglikelihood_loss,
+                value_and_grad_batch_bernoulli_loglikelihood_loss,
+                batch_hess,
+                batch_real_hess
+            )
+
+            test_student = deepcopy(student)
+            test_student_in, test_student_reallyout = split_model_emission(test_student, split_indices=instantiate(
+                cfg.neurons_split_indices)[0:1])
+            print('input shape',data.select(**cfg.breakups.k_shot_fit.input).shape)
+            test_student_in.implementation = 'scaling'
+            # print('impl',test_student_in.implementation)
+            Y = data.select(**cfg.breakups.k_shot_fit.input)
+            Y_heldout = data.select(**cfg.breakups.k_shot_fit.target)
+            posteriors = test_student_in.predict_proba(Y,mode3d=True)
+            # posteriors = (log_posteriors)
+            # posteriors = posteriors/posteriors.sum(-1,keepdims=True)
+            # print('posteriors.shape',posteriors.shape)
+            # print('lambdas.shape',lambdas.shape)
+            # print(np.isnan(posteriors[0]).any())
+            # print('lambdas',lambdas)
+            # print('posterior summed',posteriors[0].sum(-1))
+            # print(bernoulli_loglikelihood_loss(
+            #     jnp.array(Y_heldout.values)[0],
+            #     jnp.array(posteriors)[0],
+            #     jnp.array(lambdas)
+            # ))
+            # print(batch_bernoulli_loglikelihood_loss(
+            #     jnp.array(Y_heldout.values),
+            #     jnp.array(posteriors),
+            #     jnp.array(lambdas)
+            # ))
+            trial_ids = np.arange(2000)
+            lambdas_inf = np.array(compute_bernoulli_MLE(
+                jnp.array(Y_heldout.values[trial_ids].reshape(-1,Y_heldout.shape[-1])),
+                jnp.array(posteriors[trial_ids].reshape(-1,posteriors.shape[-1]))
+            ))
+            loss_value,grad = value_and_grad_batch_bernoulli_loglikelihood_loss(
+                jnp.array(Y_heldout.values),
+                jnp.array(posteriors),
+                jnp.array(lambdas_inf)
+            )
+            hess = batch_hess(
+                jnp.array(Y_heldout.values),
+                jnp.array(posteriors),
+                jnp.array(lambdas_inf)
+            )
+            hess2 = np.outer(grad.flatten(), grad.flatten())/ (len(trial_ids)**2)
+            hess3 = batch_real_hess(
+                jnp.array(Y_heldout.values),
+                jnp.array(posteriors),
+                jnp.array(lambdas_inf)
+            )
+            hess3 = hess3.reshape(hess2.shape)
+            print('hess.shape',hess2.shape,hess3.shape)
+            fig,ax = plt.subplots(figsize=(5,5))
+            ax.scatter(hess.flatten(),hess3.flatten() ,s=3)
+            all_hess=np.concatenate([hess.flatten(),hess3.flatten()])
+            minv,maxv =all_hess.min(),all_hess.max()
+            ax.plot([minv,maxv],[minv,maxv],ls='dashed',c='black')
+            ax.set_xlabel(r'$\frac{\partial L}{\partial \phi_i}\frac{\partial L}{\partial \phi_j}$',fontsize=17)
+            ax.set_ylabel(r'$\frac{\partial^2 L}{\partial \phi_i\partial \phi_j}$',fontsize=17)
+            ax.set_ylim(minv, maxv)
+            ax.set_xlim(minv, maxv)
+            ax.set_aspect('equal')
+            fig.tight_layout()
+            fig.savefig('plots/test_plots/verify_hess.png')
+            plt.close()
+            print(
+                loss_value / len(trial_ids) / cfg.length,
+                np.linalg.norm(grad) / len(trial_ids) / cfg.length ,
+                np.linalg.norm(hess2)/ len(trial_ids) / cfg.length
+            )
+
+            hess_T = hess.reshape(cfg.student.n_components,cfg.num_neurons_reallyheldout,cfg.student.n_components,
+                                  cfg.num_neurons_reallyheldout).T.reshape(hess.shape)
+            hess3_T = hess3.reshape(cfg.student.n_components, cfg.num_neurons_reallyheldout, cfg.student.n_components,
+                                  cfg.num_neurons_reallyheldout).T.reshape(hess3.shape)
+
+            from matplotlib.colors import LogNorm
+            fig,axs = plt.subplots(1,2,figsize=(8,4),sharex=True,sharey=True)
+            ax= axs[0]
+            im = ax.imshow(np.abs(hess_T),norm=LogNorm(vmin=minv,vmax=maxv))
+            ax.set_title(r'$\frac{\partial L}{\partial \phi_i}\frac{\partial L}{\partial \phi_j}$')
+            # fig.colorbar(im)
+
+            ax = axs[1]
+            ax.imshow(np.abs(hess3_T),norm=LogNorm(vmin=minv,vmax=maxv))
+            ax.set_title(r'$\frac{\partial^2 L}{\partial \phi_i\partial \phi_j}$')
+            fig.tight_layout()
+            fig.savefig('plots/test_plots/hessian_imshow.png',dpi=300)
+            plt.show()
+
+            print( )
+
+            K_range = np.logspace(0.5,2,15).astype(int)
+            repeats = cfg.train_trials//K_range//2
+            # repeats = 10
+            # K = 5
+            all_loss_values = []
+            for reps,K in zip(repeats,K_range):
+                trial_ids = np.random.choice(Y_heldout.shape[0],size=(reps,K))
+                print(Y_heldout.values[trial_ids].shape)
+                lambdas_K = np.array(batch_compute_bernoulli_MLE(
+                    jnp.array(Y_heldout.values[trial_ids].reshape(reps,-1,Y_heldout.shape[-1])),
+                    jnp.array(posteriors[trial_ids].reshape(reps,-1,posteriors.shape[-1]))
+                ))
+                # print(lambdas_K.shape)
+                loss_values = batch_batch_bernoulli_loglikelihood_loss(
+                    jnp.array(Y_heldout.values),
+                    jnp.array(posteriors),
+                    jnp.array(lambdas_K)
+                )
+                all_loss_values += [loss_values/Y_heldout.shape[0]]
+                # print(loss_values/Y_heldout.shape[0]/cfg.length)
+
+
+            ### verifying taylor
+
+            delta_phi = (lambdas_K-lambdas_inf[None]).reshape(lambdas_K.shape[0],-1)
+            print(delta_phi.shape)
+            rhs1 = loss_value / Y_heldout.shape[0] + (0.5 * delta_phi[:, None, :] @ hess [None] @ delta_phi[:, :, None])[:, 0, 0]
+            rhs2 = loss_value / Y_heldout.shape[0] + (0.5 * delta_phi[:, None, :] @ hess2[None] @ delta_phi[:, :, None])[:, 0, 0]
+            rhs3 = loss_value / Y_heldout.shape[0] + (0.5 * delta_phi[:, None, :] @ hess3[None] @ delta_phi[:, :, None])[:, 0, 0]
+            lhs = loss_values/Y_heldout.shape[0]
+
+            # print('lhs',lhs)
+            # print('rhs',rhs)
+
+            fig, ax = plt.subplots()
+            ax.scatter(lhs.flatten(), rhs1.flatten(), s=10, c='C0')
+            ax.scatter(lhs.flatten(), rhs2.flatten(), s=10, c='C1')
+            ax.scatter(lhs.flatten(), rhs3.flatten(), s=10, c='C2')
+            both = np.concatenate([lhs,rhs1,rhs2,rhs3])
+            minv, maxv = both.min(), both.max()
+            ax.plot([minv, maxv], [minv, maxv], ls='dashed', c='black')
+            margin = (maxv-minv)*0.1
+            ax.set_ylim(minv-margin, maxv+margin)
+            ax.set_xlim(minv-margin, maxv+margin)
+            ax.set_aspect('equal')
+            fig.savefig('plots/test_plots/verify_taylor.png')
+            plt.close()
+
+            ####### cramer rao with two hessians
+            hessian = hess3
+            FI = hess
+            factor =  np.trace( hessian @ np.linalg.inv(FI) ) # + 1e-3 * np.eye(hessian.shape[0])))
+            print(factor)
+
+            fig, ax = plt.subplots()
+            ax.plot(K_range, factor / 2 / K_range, ls='dashed', label=r'$\frac{1}{2K}\text{Tr}[H I^{-1}]$')
+            ax.scatter(K_range, [(np.nanmean(l)) - loss_value / Y_heldout.shape[0] for l in all_loss_values],
+                       label=r' $\langle L(\phi_\infty)-L(\phi_K) \rangle $')
+            ax.legend()
+            ax.set_xlabel(r'$K$')
+            fig.savefig('plots/test_plots/kshot_analytical.png')
+
+            plt.show()
+            plt.close(fig)
+
+            # value,grad = value_and_grad_batch_bernoulli_loglikelihood_loss(
+            #     jnp.array(Y_heldout.values),
+            #     jnp.array(posteriors),
+            #     jnp.array(lambdas)
+            # )
+
+            # print(value/len(trial_ids)/cfg.length,grad.mean()/len(trial_ids)/cfg.length)
+
+
+            test_student_in.implementation = 'log'
+
+
+
+
+
+
 
         # results_path = os.path.join(cfg.teacher_save_path, 'groundtruth')
         save_results_loc = results_path + '.csv'

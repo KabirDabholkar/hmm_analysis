@@ -1,0 +1,34 @@
+params:
+  loc    : 0.5
+  scale  : 1
+
+name : normal
+
+func_type : logpdf
+estimated_param_name : [loc] #scale
+
+dist:
+  _target_  : scipy.stats.norm
+  _partial_ : true
+
+estimator:
+  _target_  : numpy.mean
+  _partial_ : true
+  axis      : 0
+  keepdims  : true
+
+estimator_dictmodule:
+  _target_: config_utils.dict_module.DictModule
+  module  : ${estimator}
+  in_keys   : [data_samples]
+  out_keys  : [loc]
+
+
+#norm:
+#  _target_    : utils.setattrs_kwargs
+#  target      :
+#  _target_  : scipy.stats.distributions.norm_gen
+#  name      : norm
+#  sigma : 1
+#  loc   : 0
+

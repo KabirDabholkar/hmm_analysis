@@ -1,23 +1,24 @@
 defaults:
-#  - model@teacher: partial_chain_multivariate_bernoulli
-  - model@teacher: partial_chain_multivariate_poisson
+  - model@teacher: partial_chain_multivariate_bernoulli
+#  - model@teacher: partial_chain_multivariate_poisson
 
 #  - model@teacher: chain_multivariate_bernoulli
 
-#  - model@student: basic_multivariate_bernoulli
-  - model@student: basic_multivariate_poisson
+  - model@student: basic_multivariate_bernoulli
+#  - model@student: basic_multivariate_poisson
 
-#  - bits_per_spike_func: bernoulli
-  - bits_per_spike_func: poisson
+  - bits_per_spike_func: bernoulli
+#  - bits_per_spike_func: poisson
   - _self_
-  - hydra: multirun_cohmm
-  - override hydra/launcher: joblib
+#  - hydra: multirun_cohmm
+#  - override hydra/launcher: joblib
 use_teacher_as_student: false
 #use_teacher_as_student: true
 
-emission_mode : poisson
+#emission_mode : poisson
+emission_mode : bernoulli
 
-run_train     : false
+run_train     : true
 run_analysis  : true
 
 analysis:
@@ -26,16 +27,18 @@ analysis:
   compute_mutual_info               : false
   compute_latent_decoding_shuffled  : false
   plot_student_matrices             : false
-  compute_k_shot                    : true
-  compute_co_smoothing              : true
-  compute_latent_decoding_stepwise  : true
+  compute_k_shot                    : false
+  compute_co_smoothing              : false
+  compute_latent_decoding_stepwise  : false
+  compute_fisher_info_matrix        : true
+
 
 numpy_seed:
   _target_  : numpy.random.seed
   seed      : 0
 
 length        : 10
-train_trials  : 500
+train_trials  : 2000
 val_trials    : 70
 test_trials   : 100
 
@@ -64,7 +67,7 @@ student:
   random_state:
     _target_: numpy.random.RandomState
     seed    : ${student_index}
-  n_components: 20
+  n_components: 7
 
 student_index: 2
 

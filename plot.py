@@ -14,7 +14,7 @@ import matplotlib as mpl
 mpl.rcParams['text.usetex'] = True
 plt.rcParams["font.family"] = "serif"
 plt.rcParams["mathtext.fontset"] = "dejavuserif"
-# mpl.rcParams['text.latex.preamble'] = [r'\usepackage{amsmath}']
+mpl.rcParams['text.latex.preamble'] = [r'\usepackage{amsmath}']
 
 # def collater():
 #     #options = [('None',1),(10,1),(10,10)]
@@ -232,7 +232,7 @@ def main():
             'save_path': os.path.join('plots', main_dir, 'consistency_teacherstudent_vs_13shotcosmoothing.png'),
             # 'func1': partial(sns.lineplot, legend=False, units='unique_id', estimator=None, alpha=0.5, errorbar=None,
             #                  markers=False),
-            'xlim': (0.0, 0.5),
+            # 'xlim': (0.0, 0.5),
             # 'ylim': (-10, 3),
             'ylabel': r'Consistency KL divergence',
             # 'ylabel': r'teacher $\mapsto$ student',
@@ -254,7 +254,7 @@ def main():
             'save_path': os.path.join('plots', main_dir, 'consistency_teacherstudent_vs_17shotcosmoothing.png'),
             # 'func1': partial(sns.lineplot, legend=False, units='unique_id', estimator=None, alpha=0.5, errorbar=None,
             #                  markers=False),
-            'xlim': (0.0, 0.5),
+            # 'xlim': (0.0, 0.5),
             # 'ylim': (-10, 3),
             'ylabel': r'Consistency KL divergence',
             # 'ylabel': r'teacher $\mapsto$ student',
