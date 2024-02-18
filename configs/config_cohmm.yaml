@@ -1,25 +1,46 @@
 defaults:
-  - model@teacher: partial_chain_multivariate_bernoulli
+#######  Teacher ##########
+#  - model@teacher: partial_chain_multivariate_bernoulli
 #  - model@teacher: partial_chain_multivariate_poisson
+#  - model@teacher: chain_multivariate_poisson
+  - model@teacher: chain_multivariate_bernoulli
 
-#  - model@teacher: chain_multivariate_bernoulli
-
+#######  Student ##########
   - model@student: basic_multivariate_bernoulli
 #  - model@student: basic_multivariate_poisson
 
+####### Initial manipulation
+  - manipulation@initial_manipulation: enlarger_with_onehot
+
+#######  Manipulations ##########
+#  - manipulation: inconsequential_enlarger
+#  - manipulation: enlarger_with_onehot
+  - manipulation: identity
+
+#######  bits_per_spike_func ##########
   - bits_per_spike_func: bernoulli
 #  - bits_per_spike_func: poisson
   - _self_
+
+####### multirun ##########
 #  - hydra: multirun_cohmm
+#  - hydra: multirun_cohmm_scan_training_iterations
 #  - override hydra/launcher: joblib
+
 use_teacher_as_student: false
 #use_teacher_as_student: true
+
+initialise_student_as_teacher: false
+#initialise_student_as_teacher: true
 
 #emission_mode : poisson
 emission_mode : bernoulli
 
 run_train     : true
 run_analysis  : true
+
+#training_framework  : hmmlearn
+training_framework  : dynamax
 
 analysis:
   compute_similarity_metrics        : false
@@ -28,10 +49,15 @@ analysis:
   compute_latent_decoding_shuffled  : false
   plot_student_matrices             : false
   compute_k_shot                    : false
-  compute_co_smoothing              : false
+  compute_co_smoothing              : true
   compute_latent_decoding_stepwise  : false
-  compute_fisher_info_matrix        : true
+  compute_fisher_info_matrix        : false
+  compute_k_shot_jax                : false  # requires compute_fisher_info_matrix: true
 
+
+jax_MLE_func:
+  _target_  : hmm_fisher_info.batch_compute_${emission_mode}_MLE
+  _partial_ : true
 
 numpy_seed:
   _target_  : numpy.random.seed
@@ -50,8 +76,10 @@ neurons_split_indices:
   - ${num_neurons_heldin}
   - ${eval:${num_neurons_heldin}+${num_neurons_heldout}}
 
+
+student_subpath: models_traintrials${train_trials}/ncomp${student.n_components}_${student_name}_id${student_index}
 teacher_save_path: all_models_validated_v2/teacher_state${teacher.n_components}_${emission_mode}_partial_eps${teacher.transmat_epsilon}_length${length}
-student_save_path: ${teacher_save_path}/models_traintrials${train_trials}/ncomp${student.n_components}_${student_name}_id${student_index}
+student_save_path: ${teacher_save_path}/${student_subpath}
 
 ##################
 
@@ -60,8 +88,8 @@ total_trials: ${eval:${train_trials}+${val_trials}+${test_trials}}
 
 teacher:
   n_features: ${num_neurons_total}
-  n_components: 5
-  transmat_epsilon: 1e-1
+  n_components: 4
+  transmat_epsilon: 1e-2
 
 student:
   random_state:
@@ -72,7 +100,11 @@ student:
 student_index: 2
 
 ####### training config
-#training_config:
+training_config:
+  - n_iter: 10
+    params: l
+    init_params: ''
+
 #  - shift_sampling_window: ${eval:${length} - ${.shift_limits}}
 #    shift_limits: 1
 #  - shift_sampling_window: null
@@ -139,6 +171,46 @@ numpy_to_xarray_with_breakdownlabels_states:
     trials_split : ${as_tuple:trials,${eval:${listmul:train,${train_trials}}+
                                             ${listmul:val,${val_trials}}+
                                             ${listmul:test,${test_trials}}}}
+
+
+
+####### dynamax training ###########
+#dynamax_train_sgd:
+#  _target_  : compose.compose
+#  _args_:
+#    - _target_  : functools.partial
+#      optimizer:
+#        _target_: optax.sgd
+#        learning_rate: 1e-2
+#        momentum: 0.95
+#      batch_size: 10
+#      num_epochs: 400
+#      key:
+#        _target_: jax.random.PRNGKey
+#        seed: 0
+#    - _target_  : builtins.getattr
+#      _partial_ : true
+#      name      : fit_sgd
+
+
+dynamax:
+  algorithm : fit_sgd
+  fit_kwargs:
+    optimizer   :
+      _target_: optax.adam
+      learning_rate : 1e-2
+#      momentum      : 0.15
+    batch_size  : 200
+    num_epochs  : 100
+    key         :
+      _target_  : jax.random.PRNGKey
+      seed      : 0
+
+#dynamax:
+#  algorithm : fit_em
+#  fit_kwargs:
+#    num_iters : 400
+
 
 
 ###### Dict config generate ########

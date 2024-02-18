@@ -405,7 +405,7 @@ def main():
     names = ['Ground truth','Extraneous','Large but true','Corrupted']
 
     # testing
-    test_heldin, test_heldout = np.split(test_data, [n_heldin], axis=-1)
+    test_heldin, test_heldout   = np.split(test_data , [n_heldin], axis=-1)
     train_heldin, train_heldout = np.split(train_data, [n_heldin], axis=-1)
 
     co_bps_scores = []

@@ -1,0 +1,80 @@
+_target_: utils.set_attributes
+object:
+  _target_      : hmm_adapter.PoissonHMM3d
+  n_components  : ${..n_components}
+
+model_name: chain
+
+n_components: 5
+n_features: 20
+transmat_epsilon: 1e-2
+partial_components: ${.n_components}
+
+transmat_:
+  _target_: utils.empty_call
+  func:
+    _target_: compose.compose
+    _args_:
+      - _target_: utils.normalise
+        _partial_: true
+        axis: 1
+      - ${eval:'lambda x:x+${....transmat_epsilon}'}
+      - _target_: numpy.roll
+        _partial_: true
+        shift: 1
+        axis: 1
+      - _target_: numpy.eye
+        _partial_: true
+        N: ${.....n_components}
+
+lambda_partiliser_mat_:
+  _target_: utils.indicator_func_to_matrix
+  size    :
+    - ${...n_components}
+    - ${...partial_components}
+  indicator_func: ${eval:'lambda i,j:i==j'}
+
+lambda_primitive_:
+  _target_  : numpy.matmul
+  _partial_ : true
+  _args_:
+    - ${...lambda_partiliser_mat_}
+    - _target_: numpy.random.uniform
+      size:
+        - ${.....partial_components}
+        - ${.....n_features}
+
+lambdas_:
+  _target_: utils.empty_call
+  func:
+    _target_: compose.compose
+    _args_:
+#      - _target_: utils.normalise
+#        _partial_: true
+#        axis: 1
+      - _target_: numpy.exp
+        _partial_: true
+      - ${eval:lambda x:4*x}
+      - ${....lambda_primitive_}
+
+startprob_:
+  _target_: utils.empty_call
+  func:
+    _target_: compose.compose
+    _args_:
+      - _target_  : utils.normalise
+        _partial_ : true
+      - _target_  : numpy.ones
+        _partial_ : true
+        shape     : ${.....n_components}
+#      - ${eval:'lambda x:(x<=5)+5e-2'}
+#      - _target_  : numpy.arange
+#        _partial_ : true
+#        stop      : ${.....n_components}
+#      - _target_: numpy.concatenate
+#        _partial_: true
+#        arrays  :
+#          - _target_: numpy.ones
+#            shape     : 5
+#          - _target_: numpy.zeros
+#            shape     : ${eval:${.....n_components})-5}

@@ -4,6 +4,7 @@ from typing import Union
 import xarray as xr
 from collections.abc import Iterable
 import numpy as np
+import os
 
 def indicator_func_to_matrix(size,indicator_func,dtype=bool):
     A = np.zeros(size)
@@ -12,6 +13,9 @@ def indicator_func_to_matrix(size,indicator_func,dtype=bool):
             A[i,j] = indicator_func(i,j)
     return A.astype(dtype)
 
+def make_path_if_not_exist(filename):
+    if not os.path.exists(os.path.dirname(filename)):
+        os.makedirs(os.path.dirname(filename))
 
 def duplicate_list(item,repeats):
     return [item] * repeats

@@ -1,0 +1,5 @@
+_target_: utils.set_attributes
+object :
+  _target_              : hmm_manipulations.self_kronecker
+  _partial_             : true
+name  : inconsequential_enlarger

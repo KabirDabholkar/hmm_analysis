@@ -1,0 +1,15 @@
+#_target_  : compose.compose
+#_args_    :
+#- _target_  : hmm_manipulations.self_kronecker
+#  _partial_ : true
+#- _target_  : startprob_zero_after
+#  _partial_ : true
+#  after     :
+_target_: utils.set_attributes
+object :
+  _target_              : hmm_manipulations.self_kronecker_with_alternate_startprob
+  _partial_             : true
+name  : extraneous
+
+
+
