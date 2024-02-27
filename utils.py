@@ -80,6 +80,13 @@ class HMM_Dataset():
 # class DataArrayCoordsWithList(xr.DataArray):
 #     def __init__(self):
 
+def lfads_torch_datamodule_to_numpy(datamodule):
+    datamodule.setup()
+    data = np.stack([d[0].recon_data for d in datamodule.train_ds[0]])
+    return data
+
+
+
 class MultiSelectDataArray(xr.DataArray):
     caller_argnames = ('X','lengths')
     def select(self,**kwargs):
@@ -124,6 +131,8 @@ def make_hmm_xarray(array):
 #     return np.split(self,indices,axis=axis)
 
 
+batch_choice = lambda p:  np.stack([np.random.choice(p.shape[1],p=p[i]) for i in range(len(p))])
+
 normalise = lambda array,axis=None: array/array.sum(axis=axis,keepdims=True)
 
 
@@ -143,7 +152,7 @@ if __name__ == '__main__':
         np.random.uniform(size=(5,10,20)),
         dims=('trials','time','neurons'),
         coords={
-            'trials':['train']*2+['test']*3,
+            'trials' : ['train']*2+['test']*3,
             'neurons': ['heldin']*10+['heldout']*10
 
             # 'neuron_part':['heldin']*10+['heldout']*10,
@@ -222,9 +231,9 @@ if __name__ == '__main__':
         np.ones((15,20,30)),
         dims = ('trials','time','neurons'),
         coords={
-            'train':('trials',np.arange(15) <  5),
-            'val':  ('trials',(np.arange(15) >= 5)&(np.arange(15) < 10)),
-            'test': ('trials', np.arange(15) >= 10),
+            'train': ('trials',np.arange(15) <  5),
+            'val':   ('trials',(np.arange(15) >= 5)&(np.arange(15) < 10)),
+            'test':  ('trials', np.arange(15) >= 10),
             'heldin':('neurons',np.arange(30)<15)
         }
     )

@@ -27,8 +27,8 @@ defaults:
   - manipulation: identity
 
 ######## dynamax algorithm ######
-  - dynamax: em
-#  - dynamax: adam
+#  - dynamax: em
+  - dynamax: adam
 
 #######  bits_per_spike_func ##########
   - bits_per_spike_func: bernoulli
@@ -36,15 +36,15 @@ defaults:
   - _self_
 
 ####### multirun ##########
-#  - hydra: multirun_cohmm
+  - hydra: multirun_cohmm
 #  - hydra: multirun_cohmm_scan_training_iterations
-#  - override hydra/launcher: joblib
+  - override hydra/launcher: joblib
 
 data_mode: student-teacher
 #data_mode: nlb
 
-#use_teacher_as_student: false
-use_teacher_as_student: true
+use_teacher_as_student: false
+#use_teacher_as_student: true
 
 initialise_student_as_teacher: false
 #initialise_student_as_teacher: true
@@ -55,7 +55,7 @@ emission_mode : bernoulli
 # for analysis only put save_trained: false, run_train: true with zero epochs to get the correct name
 run_train     : true
 save_trained  : false
-run_analysis  : false
+run_analysis  : true
 
 #training_framework  : hmmlearn
 training_framework  : dynamax
@@ -70,11 +70,13 @@ analysis:
   compute_mutual_info               : false
   compute_latent_decoding_shuffled  : false
   plot_student_matrices             : false
-  compute_k_shot                    : false
+  compute_k_shot                    : true
   compute_co_smoothing              : false
   compute_latent_decoding_stepwise  : false
   compute_fisher_info_matrix        : false
   compute_k_shot_jax                : false  # requires compute_fisher_info_matrix: true
+
+
 
 jax_MLE_func:
   _target_  : hmm_fisher_info.batch_compute_${emission_mode}_MLE

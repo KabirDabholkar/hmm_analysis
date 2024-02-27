@@ -13,7 +13,7 @@ from config_utils import instantiate
 from main import jenson_shannon_divergence
 from prepare_model import CoHMM,split_model_emission,fuse_model
 from copy import deepcopy
-from utils import flatten_with_lengths,HMM_Dataset, normalise, setattrs, setattrs_kwargs, make_path_if_not_exist
+from utils import flatten_with_lengths,HMM_Dataset, normalise, setattrs, setattrs_kwargs, make_path_if_not_exist, lfads_torch_datamodule_to_numpy
 from metrics import bernoulli_bits_per_spike
 from hmm_adapter import CoHMM3d as CoHMM
 
@@ -35,7 +35,6 @@ def main_old(cfg):
     instantiate(cfg.numpy_seed)
 
     teacher = instantiate(cfg.teacher)
-
     generate_all_data = instantiate(cfg.generate_all_data)
     generate_train_val_test_split = instantiate(cfg.generate_train_val_test_split)
     train,val,test = generate_train_val_test_split(
@@ -146,13 +145,24 @@ def main_old(cfg):
     return
 
 @hydra.main(version_base='1.3', config_path=CONFIG_PATH, config_name=CONFIG_NAME)
+def decorated_main(cfg):
+    return main(cfg)
+
 def main(cfg):
-
+    omegaconf_resolvers()
+    print('starting')
     instantiate(cfg.numpy_seed)
+    if cfg.data_mode == 'student-teacher':
+        teacher = instantiate(cfg.teacher)
+        data = instantiate(cfg.generate_all_data_dictmodule,_convert_='partial')(hmm_model=teacher)
+    else:
+        datamodule = instantiate(cfg.datamodule,_convert_="all")
+        data_numpy = lfads_torch_datamodule_to_numpy(datamodule)[:,:35,:].astype(int)
+        # data_numpy[data_numpy>=1] = 1
+        print(data_numpy.shape)
+        data = instantiate(cfg.numpy_to_xarray_with_breakdownlabels,_convert_='partial')(data=data_numpy)
 
-    teacher = instantiate(cfg.teacher)
-
-    data = instantiate(cfg.generate_all_data_dictmodule,_convert_='partial')(hmm_model=teacher)
+    # print(data)
 
     np.random.seed(cfg.student_index)
     student = instantiate(cfg.student)
@@ -169,13 +179,16 @@ def main(cfg):
         student = teacher_inout
         cfg.student.n_components = teacher.n_components
         print('initial manipulation', cfg.initial_manipulation)
+        cfg.student_save_path = os.path.join(
+            os.path.dirname(cfg.student_save_path),
+            '_'.join(['init', 'groundtruth'])
+        )
+
         if cfg.initial_manipulation:
             manipulation = instantiate(cfg.initial_manipulation)
             student = manipulation(student)
-            cfg.student_save_path = os.path.join(
-                os.path.dirname(cfg.student_save_path),
-                '_'.join(['init','groundtruth', manipulation.name])
-            )
+            cfg.student_save_path +=manipulation.name
+
 
 
     if cfg.run_train:
@@ -193,6 +206,7 @@ def main(cfg):
                     student.fit(**fit_args)
             else:
                 student.fit(**fit_args)
+            cfg.student_name = 'hmmlearn_fit_em'
             if cfg.initialise_student_as_teacher:
                 cfg.student_save_path += f'_niter{student.monitor_.iter}_learned'+student.params
             # print('transmat sum just after training', student.transmat_.sum(-1))
@@ -200,29 +214,82 @@ def main(cfg):
         elif cfg.training_framework == 'dynamax':
             # print(data[0].shape,'here')
             train_data = data.select(**cfg.breakups.fit.train)
+
             student._init(train_data[0])
             # print(student.lambdas_.shape,student.transmat_.shape,stu)
             # print(student.n_features,student.n_features)
+            print('before dynamax')
+            jnp.asarray([1,2,3])
+            print('after jax line 1')
             student_dynamax,student_params,student_params_prop = hmmlearn_to_dynamaxhmm(student)
+            print('after hmmlearn to dynamax')
+            if cfg.initialise_dynamax:
+                mean_val = np.asarray(train_data).mean()
+                print('mean_val',mean_val)
+                scale = len(np.asarray(train_data).flatten()) / student.n_components / 1000
+                student_dynamax.emission_component.emission_prior_concentration0 = (1-mean_val) * scale
+                student_dynamax.emission_component.emission_prior_concentration1 = mean_val * scale
+                student_dynamax.emission_component.emission_prior_concentration = mean_val
+                student_dynamax.emission_component.emission_prior_rate = 1
+                # student_dynamax.emission_prior_concentration=0.1
+                # student_dynamax.emission_prior_rate=1.0
+                student_params,student_params_prop = student_dynamax.initialize(
+                    initial_probs =  jnp.asarray(student.startprob_),
+                    transition_matrix = jnp.asarray(student.transmat_),
+                )
+                # fig,ax = plt.subplots()
+                # ax.hist(student_params.emissions.rates.flatten(),bins=30)
+                #
+                # plt.savefig('plots/test_plots/dynamax_initial_emission_prob.png')
+                # plt.close(fig)
+            # print('before training',student_params)
 
-            new_student_params,_ = getattr(student_dynamax,cfg.dynamax.algorithm)(
-                student_params,
-                student_params_prop,
-                jnp.asarray(train_data),
-                **instantiate(cfg.dynamax.fit_kwargs)
-            )
+            # print(np.asarray(train_data))
+            all_losses = []
+            if hasattr(cfg.dynamax,'shape_curriculum'):
+                new_student_params = student_params
+                for stage in cfg.dynamax.shape_curriculum:
+                    windows = np.arange(0,train_data.shape[1]+1,stage.window_length)
+                    windows = np.stack([windows[:-1],windows[1:]],axis=1)
+                    reshaped_train_data = np.concatenate([train_data[:,s:e,:] for (s,e) in windows])
+                    print('reshaped train data shape',reshaped_train_data.shape)
+
+                    new_student_params, losses = getattr(student_dynamax, cfg.dynamax.algorithm)(
+                        new_student_params,
+                        student_params_prop,
+                        jnp.asarray(reshaped_train_data),
+                        **instantiate(cfg.dynamax.fit_kwargs)
+                    )
+                    all_losses.append(losses)
+                losses = np.concatenate(all_losses)
+            else:
+                print('here,')
+                new_student_params,losses = getattr(student_dynamax,cfg.dynamax.algorithm)(
+                    student_params,
+                    student_params_prop,
+                    jnp.asarray(train_data),
+                    **instantiate(cfg.dynamax.fit_kwargs)
+                )
+
+            fig,ax = plt.subplots()
+            ax.plot(losses)
+            fig.savefig('plots/test_plots/losses_dynamax_adam.png')
+            plt.close(fig)
+            print('after training',new_student_params)
             student = dynamaxhmm_to_hmmlearn(student_dynamax,new_student_params)
-            cfg.student_save_path += f'_niter{student.monitor_.iter}_learned' + student.params
+            cfg.student_save_path += '_dynamax_' + cfg.dynamax.algorithm
+            cfg.student_name = 'dynamax_'+ cfg.dynamax.algorithm
         else:
             raise Exception('cfg.training_framework must be one of "hmmlearn" or "dynamax".')
 
+        if cfg.save_trained:
 
-
-        student_save_path = cfg.student_save_path
-        if not os.path.exists(os.path.dirname(student_save_path)):
-            os.makedirs(os.path.dirname(student_save_path))
-        with open(student_save_path, 'wb') as f:
-            pkl.dump(student, f)
+            student_save_path = cfg.student_save_path
+            print('saving', student_save_path)
+            if not os.path.exists(os.path.dirname(student_save_path)):
+                os.makedirs(os.path.dirname(student_save_path))
+            with open(student_save_path, 'wb') as f:
+                pkl.dump(student, f)
 
 
     if cfg.run_analysis:
@@ -256,16 +323,20 @@ def main(cfg):
                 'params_learned': student.params,
             }
 
+            print('loading',student_save_path)
             results_path = cfg.student_save_path
             try:
                 with open(student_save_path,'rb') as f:
                     student = pkl.load(f)
             except:
+                print('could not load student, cancelling analysis.')
                 keys = cfg.analysis.keys()
                 for key in keys:
                     cfg.analysis[key] = False
 
+
         print('manipulation',cfg.manipulation)
+
         if cfg.manipulation:
             manipulation = instantiate(cfg.manipulation)
             student = manipulation(student)
@@ -313,6 +384,7 @@ def main(cfg):
                 result_data['similarity.'+name] = measure(student_latent, teacher_latent)
 
         if cfg.analysis.compute_co_smoothing:
+
             test_student = deepcopy(student)
             (
                 test_student_in,
@@ -455,10 +527,11 @@ def main(cfg):
                 # plt.close(fig)
 
 
+
         if cfg.analysis.compute_latent_decoding:
             print(teacher.n_features, student.n_features)
-            generate_all_data = instantiate(cfg.generate_all_data)
-            teacher_ = split_model_emission(teacher,split_indices=instantiate(cfg.neurons_split_indices)[1:2])[0]
+            # generate_all_data = instantiate(cfg.generate_all_data)
+            teacher_ = split_model_emission(teacher, split_indices=instantiate(cfg.neurons_split_indices)[1:2])[0]
             student_ = split_model_emission(student, split_indices=instantiate(cfg.neurons_split_indices)[1:2])[0]
             print('n_features',teacher_.n_features,student_.n_features)
             print(instantiate(cfg.neurons_split_indices))
@@ -483,12 +556,13 @@ def main(cfg):
                 test_model2_in, _ = split_model_emission(model2, split_indices=instantiate(cfg.neurons_split_indices)[0:1])
                 # proba1 = model1.predict_proba(obs.select(**cfg.breakups.decoding.fit.input),mode3d=True)
                 proba = test_model2_in.predict_proba(obs.select(**cfg.breakups.decoding.fit.input), mode3d=True)
-
+                proba_r = proba.reshape(-1,proba.shape[-1])
                 T = np.ones((model2.n_components,model1.n_components))
                 for j in range(model1.n_components):
                     select_idx = np.reshape((states.select(**cfg.breakups.decoding.fit.states)==j).values,-1)
                     # print(proba.dtype,proba.shape)
-                    T[:,j] = proba[select_idx].sum(0)
+                    # print(proba.shape,(states.select(**cfg.breakups.decoding.fit.states)==j).values.shape)
+                    T[:,j] = proba_r[select_idx].sum(0)
 
                 T = normalise(T,axis=0)
 
@@ -507,7 +581,7 @@ def main(cfg):
                 # result_data[result_name] = test_loglikelihood
 
                 proba = test_model2_in.predict_proba(obs.select(**cfg.breakups.decoding.test.input), mode3d=True)
-
+                proba_r = proba.reshape(-1,proba.shape[-1])
                 T_test = np.ones((model2.n_components,model1.n_components))
 
                 counts_ = np.bincount(
@@ -525,7 +599,7 @@ def main(cfg):
                     select_idx = np.reshape((states.select(**cfg.breakups.decoding.test.states)==j).values,-1)
                     # print(proba.dtype,proba.shape)
                     # T_test[:,j] = normalise( proba[select_idx].sum(0) + eps )
-                    select_proba = proba[select_idx]
+                    select_proba = proba_r[select_idx]
 
                     if select_proba.shape[0]>0:
                         mean_div += jenson_shannon_divergence(
@@ -538,7 +612,7 @@ def main(cfg):
                 # test_d_js = (np.log(T + eps) * T_test).sum()
 
                 result_data['decoder_'+result_name] = mean_div
-                print(result_name , mean_div)
+                print('decoder_'+result_name , mean_div)
 
 
                 mean_D_KL = (counts[None,:] * counts[:,None] * (T[:,None,:] * np.log(T[:,None,:]/T[:,:,None]+eps)).sum(0)).sum()
@@ -563,6 +637,86 @@ def main(cfg):
                 # axs[2].plot(counts)
                 # fig.tight_layout()
                 # plt.savefig(f'plots/test_plots/T_Ttest{result_name}.png')
+
+        if cfg.analysis.compute_latent_decoding_linear:
+            teacher_inout = split_model_emission(teacher,split_indices=instantiate(cfg.neurons_split_indices)[1:2])[0]
+            student_inout = split_model_emission(student, split_indices=instantiate(cfg.neurons_split_indices)[1:2])[0]
+            for name,teacher_,student_ in [('teacher->student',teacher_inout,student_inout),('student->teacher',student_inout,teacher_inout)]:
+                # print(data.select(**cfg.breakups.decoding.fit.input))
+                train_input_data = data.select(**cfg.breakups.decoding.fit.input).values
+                test_input_data = data.select(**cfg.breakups.decoding.test.input).values
+                # teacher_.predict_proba(input_data,mode3d=True)
+                teacher_in, _ = split_model_emission(teacher_, split_indices=instantiate(cfg.neurons_split_indices)[0:1])
+                student_in, _ = split_model_emission(student_, split_indices=instantiate(cfg.neurons_split_indices)[0:1])
+                proba_teacher = teacher_in.predict_proba(train_input_data, mode3d=True)
+                proba_student = student_in.predict_proba(train_input_data, mode3d=True)
+                proba_teacher_r = proba_teacher.reshape(-1, proba_teacher.shape[-1])
+                proba_student_r = proba_student.reshape(-1, proba_student.shape[-1])
+
+                y = proba_student_r
+                print(cfg.decoding)
+                if hasattr(cfg.decoding,'preprocess_target'):
+                    y = instantiate(cfg.decoding.preprocess_target)(y)
+
+
+                # from sklearn.linear_model import LinearRegression
+                model = instantiate(cfg.decoding.regression_model)
+                model.fit(
+                    proba_teacher_r,
+                    y
+                )
+                proba_teacher = teacher_in.predict_proba(test_input_data, mode3d=True)
+                proba_student = student_in.predict_proba(test_input_data, mode3d=True)
+                proba_teacher_r = proba_teacher.reshape(-1, proba_teacher.shape[-1])
+                proba_student_r = proba_student.reshape(-1, proba_student.shape[-1])
+
+
+                pred_r = getattr(model,cfg.decoding.predict_method)(proba_teacher_r)
+
+                metric = instantiate(cfg.decoding.metric)
+                score = np.stack([metric(
+                    proba_student_r[i],
+                    pred_r[i]
+                ) for i in range(pred_r.shape[0])]).mean()
+
+                print(name,'decoding score',score)
+                result_data['linear_decoder_'+name] = score
+
+        # if cfg.analysis.compute_latent_decoding_logistic:
+        #     teacher_inout = split_model_emission(teacher, split_indices=instantiate(cfg.neurons_split_indices)[1:2])[0]
+        #     student_inout = split_model_emission(student, split_indices=instantiate(cfg.neurons_split_indices)[1:2])[0]
+        #     for name, teacher_, student_ in [('teacher->student', teacher_inout, student_inout),
+        #                                      ('student->teacher', student_inout, teacher_inout)]:
+        #         # print(data.select(**cfg.breakups.decoding.fit.input))
+        #         train_input_data = data.select(**cfg.breakups.decoding.fit.input).values
+        #         test_input_data = data.select(**cfg.breakups.decoding.test.input).values
+        #         # teacher_.predict_proba(input_data,mode3d=True)
+        #         teacher_in, _ = split_model_emission(teacher_,
+        #                                              split_indices=instantiate(cfg.neurons_split_indices)[0:1])
+        #         student_in, _ = split_model_emission(student_,
+        #                                              split_indices=instantiate(cfg.neurons_split_indices)[0:1])
+        #         proba_teacher = teacher_in.predict_proba(train_input_data, mode3d=True)
+        #         proba_student = student_in.predict_proba(train_input_data, mode3d=True)
+        #         proba_teacher_r = proba_teacher.reshape(-1, proba_teacher.shape[-1])
+        #         proba_student_r = proba_student.reshape(-1, proba_student.shape[-1])
+        #
+        #         # from sklearn.linear_model import LinearRegression
+        #         model = instantiate(cfg.decoding.regression_model)
+        #         model.fit(
+        #             proba_teacher_r,
+        #             proba_student_r
+        #         )
+        #         proba_teacher = teacher_in.predict_proba(test_input_data, mode3d=True)
+        #         proba_student = student_in.predict_proba(test_input_data, mode3d=True)
+        #         proba_teacher_r = proba_teacher.reshape(-1, proba_teacher.shape[-1])
+        #         proba_student_r = proba_student.reshape(-1, proba_student.shape[-1])
+        #
+        #         score = model.score(
+        #             proba_teacher_r,
+        #             proba_student_r
+        #         )
+        #         print(name, 'decoding score', score)
+        #         result_data['linear_decoder_' + name] = score
 
         if cfg.analysis.compute_latent_decoding_shuffled:
             print(teacher.n_features, student.n_features)
@@ -595,12 +749,13 @@ def main(cfg):
                 test_model2_in, _ = split_model_emission(model2, split_indices=instantiate(cfg.neurons_split_indices)[0:1])
                 # proba1 = model1.predict_proba(obs.select(**cfg.breakups.decoding.fit.input),mode3d=True)
                 proba = test_model2_in.predict_proba(obs.select(**cfg.breakups.decoding.fit.input), mode3d=True)
+                proba_r = proba.reshape(-1, proba.shape[-1])
 
                 T = np.ones((model2.n_components,model1.n_components))
                 for j in range(model1.n_components):
                     select_idx = np.reshape((states.select(**cfg.breakups.decoding.fit.states)==j).values,-1)
                     # print(proba.dtype,proba.shape)
-                    T[:,j] = proba[select_idx].sum(0)
+                    T[:,j] = proba_r[select_idx].sum(0)
 
                 T = normalise(T,axis=0)
 
@@ -619,6 +774,7 @@ def main(cfg):
                 # result_data[result_name] = test_loglikelihood
 
                 proba = test_model2_in.predict_proba(obs.select(**cfg.breakups.decoding.test.input), mode3d=True)
+                proba_r = proba.reshape(-1, proba.shape[-1])
 
                 T_test = np.ones((model2.n_components,model1.n_components))
 
@@ -637,7 +793,7 @@ def main(cfg):
                     select_idx = np.reshape((states.select(**cfg.breakups.decoding.test.states)==j).values,-1)
                     # print(proba.dtype,proba.shape)
                     # T_test[:,j] = normalise( proba[select_idx].sum(0) + eps )
-                    select_proba = proba[select_idx]
+                    select_proba = proba_r[select_idx]
 
                     if select_proba.shape[0]>0:
                         mean_div += jenson_shannon_divergence(
@@ -665,8 +821,9 @@ def main(cfg):
 
 
         if cfg.analysis.compute_k_shot:
-            K_range = np.logspace(0.5,2,15).astype(int)
-            repeats = cfg.train_trials//K_range//2
+            # K_range = np.logspace(0.5,2,15).astype(int)
+            K_range = np.array([6])
+            repeats = cfg.train_trials//K_range
             print(repeats)
             test_students = []
             for i,k in enumerate(K_range):
@@ -709,7 +866,7 @@ def main(cfg):
                     save_repeats.append(co_bps)
                 score_name = f'{k}-shot co-smoothing'
                 result_data[score_name] = sum(save_repeats)/len(save_repeats)
-
+                print(score_name,result_data[score_name])
                 test_students.append(save_repeats)
 
             # score_names = ['co-smoothing']+[f'{k}-shot co-smoothing' for k in K_range]
@@ -979,7 +1136,13 @@ def main(cfg):
         DF = pd.DataFrame([result_data])
         DF.to_csv(save_results_loc, index=False)
 
+
+        # return result_data
+        print('done saved')
+        return
+    print('done')
     return
+
 
 
 @hydra.main(version_base='1.3', config_path=CONFIG_PATH, config_name=CONFIG_NAME)
@@ -1041,19 +1204,24 @@ def main_old():
         instantiate(cfg)(BernoulliHMM)
     )
 
-
-if __name__ == '__main__':
+def omegaconf_resolvers():
     resolvers = {
         'eval'      : eval,
         'ind'       : lambda a, i: a[i],
         'listmul'   : lambda l, i: [l] * i,
         'getattr'   : getattr,
         'setattrs'  : setattrs,
-        'as_tuple'  :  lambda *args: tuple(args),
+        'as_tuple'  : lambda *args: tuple(args),
+        'relpath'   : lambda p: os.path.join(
+            '/Users/kabir/Documents/code/lfads-torch',p
+        )
     }
     for resolver_name,resolver_val in resolvers.items():
         if not OmegaConf.has_resolver(resolver_name):
             OmegaConf.register_new_resolver(resolver_name,resolver_val)
+
+if __name__ == '__main__':
+    # omegaconf_resolvers()
     # OmegaConf.register_new_resolver("eval", eval)
     # OmegaConf.register_new_resolver("ind", lambda a, i: a[i])
     # OmegaConf.register_new_resolver("listmul", lambda l, i: [l] * i)
@@ -1062,4 +1230,4 @@ if __name__ == '__main__':
     # OmegaConf.register_new_resolver('as_tuple', lambda *args: tuple(args))
 
     # xarray_test()
-    main()
+    decorated_main()

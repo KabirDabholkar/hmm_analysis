@@ -32,6 +32,7 @@ def hmmlearn_to_dynamaxhmm(hmmlearn_model):
     params, param_props = jax_model.initialize(
         **init_params
     )
+    # print('hmmlearn to dynamax',params.emissions)
     return jax_model, params, param_props
 
 def dynamaxhmm_to_hmmlearn(dynamax_model,params):
@@ -43,18 +44,19 @@ def dynamaxhmm_to_hmmlearn(dynamax_model,params):
         'PoissonHMM'   : hmmlearn_PoissonHMM,
     }[dynamax_model.__class__.__name__]
     emission_param_name = {
-        'BernoulliHMM':'emission_probs',
-        'PoissonHMM': 'emission_rates'
+        'BernoulliHMM':'probs',
+        'PoissonHMM': 'rates'
     }[dynamax_model.__class__.__name__]
     hmmlearn_model = hmm_class(n_components=n_components)
     # print(params.initial.probs,params.transitions.transition_matrix,n_components,params.emissions.probs)
-
+    # print(params.emissions)
+    # print(params.initial.probs)
     setattrs_kwargs(
         hmmlearn_model,
         **{
             'startprob_' : np.asarray(params.initial.probs),
             'transmat_'  : np.asarray(params.transitions.transition_matrix),
-            'lambdas_'   : np.asarray(params.emissions.probs),
+            'lambdas_'   : np.asarray(getattr(params.emissions,emission_param_name)),
             'n_features' : n_features
         }
     )
@@ -112,9 +114,9 @@ def main(cfg):
         params,
         param_props,
         jnp.asarray(all_data),
-        optimizer=optax.sgd(
+        optimizer=optax.adam(
             learning_rate=1e-2,
-            momentum=0.95
+            # momentum=0.95
         ),
         batch_size=10,
         num_epochs=400,

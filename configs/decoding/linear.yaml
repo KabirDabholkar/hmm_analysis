@@ -1,0 +1,5 @@
+regression_model:
+  _target_  : sklearn.linear_model.LinearRegression
+predict_method : predict
+metric  :
+  _target_  : sklearn.metrics.r2_score

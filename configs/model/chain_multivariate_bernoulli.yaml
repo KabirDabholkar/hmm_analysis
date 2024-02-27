@@ -7,7 +7,7 @@ model_name: chain
 
 n_components: 5
 n_features: 20
-transmat_epsilon: 1e-2
+transmat_epsilon: 4e-2
 
 transmat_:
   _target_: utils.empty_call
@@ -28,6 +28,8 @@ transmat_:
 
 lambdas_:
   _target_: numpy.random.uniform
+  low   : 0.0
+  high  : 1.0 #0.2
   size:
    - ${...n_components}
    - ${...n_features}

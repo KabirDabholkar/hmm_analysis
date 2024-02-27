@@ -2,6 +2,8 @@ import numpy as np
 import logging
 logger = logging.getLogger(__name__)
 
+
+
 def self_consistency_score(model,X_lengths,window_length=10,eps=1e-3):
     X_val, lengths_val = X_lengths
     N = sum(lengths_val)

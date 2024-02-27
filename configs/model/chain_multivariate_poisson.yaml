@@ -39,8 +39,9 @@ lambda_primitive_:
   _partial_ : true
   _args_:
     - ${...lambda_partiliser_mat_}
-    - _target_: numpy.random.uniform
-      size:
+    - _target_: numpy.random.exponential
+      scale   : 0.1
+      size    :
         - ${.....partial_components}
         - ${.....n_features}
 
@@ -52,9 +53,9 @@ lambdas_:
 #      - _target_: utils.normalise
 #        _partial_: true
 #        axis: 1
-      - _target_: numpy.exp
-        _partial_: true
-      - ${eval:lambda x:4*x}
+#      - _target_: numpy.exp
+#        _partial_: true
+#      - ${eval:lambda x:0.01*x}
       - ${....lambda_primitive_}
 
 startprob_:

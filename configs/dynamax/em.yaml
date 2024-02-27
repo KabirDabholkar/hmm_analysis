@@ -1,0 +1,3 @@
+algorithm : fit_em
+fit_kwargs:
+  num_iters : 0 # 400

@@ -91,6 +91,7 @@ def plot_scatter_with_lines(
         xlim=[],
         ylim=[],
         hlines=[],
+        print_corrcoef = False,
         zoom_inset: Optional[dict] = None,
 ):
     fig,axs = plt.subplots()
@@ -101,7 +102,6 @@ def plot_scatter_with_lines(
         all_axes.append(ax_ins)
     for ax in all_axes:
         data_ = data.sort_values(by=sortby)
-        print(data_[['params_learned','iterations','original co-smoothing']])
         func1(x=x, y=y, hue=hue, data=data_, ax=ax)
         if func2:
             # print(func2)
@@ -127,6 +127,12 @@ def plot_scatter_with_lines(
     axs.set_ylim(*ylim)
     axs.set_xlabel(x if xlabel is None else xlabel)
     axs.set_ylabel(y if ylabel is None else ylabel)
+    if print_corrcoef:
+        a,b = data[[x,y]].dropna().values.T
+        print(a,b)
+        corrcoef = np.corrcoef(a,b)[0,1]
+        print('corrcoef',corrcoef)
+        ax.set_title('Corrcoef=%.2f'%corrcoef)
     if zoom_inset:
         # ax_ins.set_xlim(*zoom_xlim)
         # ax_ins.set_ylim(*zoom_ylim)
@@ -160,7 +166,7 @@ def main():
     #     sub_dir=''
     # )
     DF = DF.replace(to_replace='Groundtruth',value='Ground truth')
-    print(DF['params_learned'])
+    # print(DF['params_learned'])
     DF['params_learned'][DF['params_learned'].isna()] = 'stl'
     # print(DF[DF['model_name']=='Ground truth'].n_components)
 
@@ -169,6 +175,8 @@ def main():
     if 'test_self_consistency' in DF.columns:
         DF['self_consistency'] = DF['test_self_consistency']
 
+    DF['6-shot co-smoothing delta'] = DF['6-shot co-smoothing'] - DF['original co-smoothing']
+    DF['log_linear_decoder_teacher->student'] = np.log(np.maximum(DF['linear_decoder_teacher->student'],1e-10))
     # DF['decoder_student->teacher ratio'] = DF['decoder_student->teacher'] / DF['decoder_student->teacher shuffled']
     # DF['decoder_teacher->student ratio'] = DF['decoder_teacher->student'] / DF['decoder_teacher->student shuffled']
     #sns.scatterplot(data = DF)
@@ -198,20 +206,32 @@ def main():
     #     # models_k_shot['n_components'].apply(str).type
     #     # models_k_shot['model_id']
     # )
-    print(modelsDF[['original co-smoothing','13-shot co-smoothing']])
+
+    best_cosmoothing_models = modelsDF[modelsDF['original co-smoothing'] > (modelsDF['original co-smoothing'].max() - 0.05)]
+    best_cosmoothing_models = best_cosmoothing_models[best_cosmoothing_models.model_name=='dynamax_fit_em']
+    print(
+        'best',
+        best_cosmoothing_models.columns,
+        print(best_cosmoothing_models),
+        best_cosmoothing_models.sort_values(by='linear_decoder_teacher->student').dropna(),
+    )
+
+    # print(modelsDF[['original co-smoothing','13-shot co-smoothing']])
     plot_args_list = [
         {
             'x': 'original co-smoothing',
             'y': '13-shot co-smoothing',  # -angular
-            # 'hue': 'n_components',  # 'unique_id',
-            'hue' : 'iterations',
-            'sortby' : ['params_learned','iterations'],
-            'data': modelsDF,# modelsDF[modelsDF['original co-smoothing'] > (modelsDF['original co-smoothing'].max() - 0.02)],
+            'hue': 'n_components',  # 'unique_id',
+            # 'hue' : 'iterations',
+            # 'hue'   : 'model_name',
+            'sortby' : ['model_name','n_components'],
+            'data': modelsDF, # modelsDF[modelsDF['original co-smoothing'] > (modelsDF['original co-smoothing'].max() - 0.02)],
             'data_lines': modelsGT,
             # 'data_lines': None,
             'save_path': os.path.join('plots', main_dir, '13-shot_vs_original_cosmoothing.png'),
-            'func2': partial(sns.lineplot, hue='params_learned', legend=True, estimator=None, alpha=1, errorbar=None,
-                             markers=False),
+            'func1': partial(sns.scatterplot, style='model_name'),
+            # 'func2': partial(sns.lineplot, hue='params_learned', legend=True, estimator=None, alpha=1, errorbar=None,
+            #                  markers=False),
             # 'func2': partial(sns.lineplot, hue='params_learned', legend=True, estimator=None, alpha=1, errorbar=None,
             #      markers=False),
             # 'xlim': (0.44, ),
@@ -219,35 +239,89 @@ def main():
             # 'ylabel': r'Consistency KL divergence',
             # 'ylabel': r'teacher $\mapsto$ student',
             # 'hlines': list(modelsDF.groupby('model_name').test_score.max())
-            # 'zoom_inset': {
-            #     'bounds': [0.1, 0.4, 0.4, 0.4],
-            #     'xlim': (0.44, 0.45),
-            #     'ylim': (0.37, 0.38),
-            # },
+            'zoom_inset': {
+                'bounds': [0.1, 0.4, 0.4, 0.4],
+                'xlim': (0.44, 0.45),
+                'ylim': (0.37, 0.38),
+            },
         },
         {
             'x': 'original co-smoothing',
             'y': '6-shot co-smoothing',  # -angular
-            # 'hue': 'n_components',  # 'unique_id',
-            'hue': 'iterations',
-            'sortby': ['params_learned', 'iterations'],
+            'hue': 'n_components',  # 'unique_id',
+            # 'hue': 'iterations',
+            # 'hue': 'model_name',
+            'sortby' : ['model_name','n_components'], # 'sortby': ['params_learned', 'iterations'],
             'data': modelsDF,
             # modelsDF[modelsDF['original co-smoothing'] > (modelsDF['original co-smoothing'].max() - 0.02)],
             'data_lines': modelsGT,
             # 'data_lines': None,
             'save_path': os.path.join('plots', main_dir, '6-shot_vs_original_cosmoothing.png'),
-            'func2': partial(sns.lineplot, hue='params_learned', legend=True, estimator=None, alpha=1, errorbar=None,
-                             markers=False),
-            # 'xlim': (0.44,),
-            # 'ylim': (0.24,),
+            'func1' : partial(sns.scatterplot,style='model_name'),
+            # 'func2': partial(sns.lineplot, hue='params_learned', legend=True, estimator=None, alpha=1, errorbar=None,
+            #                  markers=False),
+            'xlim': (0.0,0.5),
+            'ylim': (0.0,1.1),
+            # 'ylabel': r'Consistency KL divergence',
+            # 'ylabel': r'teacher $\mapsto$ student',
+            # 'hlines': list(modelsDF.groupby('model_name').test_score.max())
+            'zoom_inset': {
+                'bounds': [0.6, 0.06, 0.3, 0.3],
+                'xlim': (0.42,0.455),
+                'ylim': (0.15,0.28),
+            },
+        },
+        {
+            'x': '6-shot co-smoothing', #'6-shot co-smoothing',
+            'y': 'log_linear_decoder_teacher->student',  # -angular
+            'hue': 'n_components',  # 'unique_id',
+            # 'hue': 'model_id',
+            # 'hue': 'model_name',
+            'sortby': ['model_name', 'n_components'],  # 'sortby': ['params_learned', 'iterations'],
+            'data': modelsDF[modelsDF['original co-smoothing'] > (modelsDF['original co-smoothing'].max() - 0.05)],
+            'data_lines': modelsGT,
+            # 'data_lines': None,
+            'save_path': os.path.join('plots', main_dir, 'decoder_teacher->student_6-shot.png'),
+            'func1': partial(sns.scatterplot, style='model_name'),
+            # 'func2': partial(sns.lineplot, hue='params_learned', legend=True, estimator=None, alpha=1, errorbar=None,
+            #                  markers=False),
+            'xlim': (0.0,0.5),
+            # 'ylim': (0.0,0.1),
             # 'ylabel': r'Consistency KL divergence',
             # 'ylabel': r'teacher $\mapsto$ student',
             # 'hlines': list(modelsDF.groupby('model_name').test_score.max())
             # 'zoom_inset': {
-            #     'bounds': [0.1, 0.4, 0.4, 0.4],
-            #     'xlim': (0.447,0.45),
-            #     'ylim': (0.24,0.28),
+            #     'bounds': [0.6, 0.06, 0.3, 0.3],
+            #     'xlim': (0.42, 0.455),
+            #     'ylim': (0.15, 0.28),
             # },
+            'print_corrcoef': True,
+        },
+        {
+            'x': 'original co-smoothing',  # '6-shot co-smoothing',
+            'y': 'log_linear_decoder_teacher->student',  # -angular
+            'hue': 'n_components',  # 'unique_id',
+            # 'hue': 'iterations',
+            # 'hue': 'model_name',
+            'sortby': ['model_name', 'n_components'],  # 'sortby': ['params_learned', 'iterations'],
+            'data': modelsDF[modelsDF['original co-smoothing'] > (modelsDF['original co-smoothing'].max() - 0.1)],
+            'data_lines': modelsGT,
+            # 'data_lines': None,
+            'save_path': os.path.join('plots', main_dir, 'decoder_teacher->student_original.png'),
+            'func1': partial(sns.scatterplot, style='model_name'),
+            # 'func2': partial(sns.lineplot, hue='params_learned', legend=True, estimator=None, alpha=1, errorbar=None,
+            #                  markers=False),
+            'xlim': (0.4, 0.5),
+            # 'ylim': (0.0, 0.1),
+            # 'ylabel': r'Consistency KL divergence',
+            # 'ylabel': r'teacher $\mapsto$ student',
+            # 'hlines': list(modelsDF.groupby('model_name').test_score.max())
+            # 'zoom_inset': {
+            #     'bounds': [0.6, 0.06, 0.3, 0.3],
+            #     'xlim': (0.42, 0.455),
+            #     'ylim': (0.15, 0.28),
+            # },
+            'print_corrcoef': True,
         },
 
         # {

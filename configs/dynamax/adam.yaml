@@ -1,0 +1,16 @@
+algorithm : fit_sgd
+#shape_curriculum:
+#  - window_length: 35
+#  - window_length: 10
+#  - window_length: 20
+#  - window_length: 35
+fit_kwargs:
+  optimizer   :
+    _target_: optax.adam
+    learning_rate : 1e-2
+#    momentum      : 0.15
+  batch_size  : 200 #30 #300
+  num_epochs  : 0 # 100 #100 #80
+  key         :
+    _target_  : jax.random.PRNGKey
+    seed      : 0

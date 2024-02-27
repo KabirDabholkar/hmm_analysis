@@ -1,0 +1,8 @@
+length        : 10
+train_trials  : 2000
+val_trials    : 70
+test_trials   : 100
+
+num_neurons_heldin        : 20
+num_neurons_heldout       : 50
+num_neurons_reallyheldout : 50

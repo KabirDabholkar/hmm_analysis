@@ -1,0 +1,9 @@
+regression_model:
+  _target_  : sklearn.linear_model.LogisticRegression
+predict_method: predict_proba
+preprocess_target:
+  _target_  : utils.batch_choice
+  _partial_ : true
+metric  :
+  _target_ : scipy.special.rel_entr
+  _partial_ : true

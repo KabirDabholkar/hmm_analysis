@@ -1,0 +1,7 @@
+defaults:
+  - config_cohmm
+  - _self_
+
+data_mode: nlb
+student:
+  n_components: 100
