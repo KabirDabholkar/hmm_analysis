@@ -1,3 +1,4 @@
 algorithm : fit_em
 fit_kwargs:
   num_iters : 0 # 400
+name: ${.algorithm}_${.fit_kwargs.num_iters}

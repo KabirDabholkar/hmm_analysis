@@ -271,10 +271,10 @@ def main(cfg):
                     **instantiate(cfg.dynamax.fit_kwargs)
                 )
 
-            fig,ax = plt.subplots()
-            ax.plot(losses)
-            fig.savefig('plots/test_plots/losses_dynamax_adam.png')
-            plt.close(fig)
+            # fig,ax = plt.subplots()
+            # ax.plot(losses)
+            # fig.savefig('plots/test_plots/losses_dynamax_adam.png')
+            # plt.close(fig)
             print('after training',new_student_params)
             student = dynamaxhmm_to_hmmlearn(student_dynamax,new_student_params)
             cfg.student_save_path += '_dynamax_' + cfg.dynamax.algorithm
@@ -283,12 +283,12 @@ def main(cfg):
             raise Exception('cfg.training_framework must be one of "hmmlearn" or "dynamax".')
 
         if cfg.save_trained:
-
             student_save_path = cfg.student_save_path
             print('saving', student_save_path)
             if not os.path.exists(os.path.dirname(student_save_path)):
                 os.makedirs(os.path.dirname(student_save_path))
             with open(student_save_path, 'wb') as f:
+                print('inside open')
                 pkl.dump(student, f)
 
 

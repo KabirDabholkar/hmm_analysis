@@ -14,3 +14,4 @@ fit_kwargs:
   key         :
     _target_  : jax.random.PRNGKey
     seed      : 0
+name: ${.algorithm}_${.fit_kwargs.optimizer._target_}_lr${.fit_kwargs.optimizer.learning_rate}_batch${.fit_kwargs.batch_size}_epochs${.fit_kwargs.num_epochs}

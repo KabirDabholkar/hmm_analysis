@@ -27,8 +27,8 @@ defaults:
   - manipulation: identity
 
 ######## dynamax algorithm ######
-  - dynamax: em
-#  - dynamax: adam
+#  - dynamax: em
+  - dynamax: adam
 
 #######  bits_per_spike_func ##########
   - bits_per_spike_func: bernoulli
@@ -54,7 +54,7 @@ emission_mode : bernoulli
 
 # for analysis only put save_trained: false, run_train: true with zero epochs to get the correct name
 run_train     : true
-save_trained  : false
+save_trained  : true
 run_analysis  : false
 
 #training_framework  : hmmlearn
