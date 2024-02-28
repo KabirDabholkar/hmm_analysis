@@ -39,11 +39,11 @@ def load_config_with_overrides_and_run(
     ):
         print('config path', config_path.name)
         config = hydra.compose(config_name=config_path.name, overrides=overrides)
-    main(config)
+    return main(config)
     # print(OmegaConf.to_yaml(config))
 
 if __name__ == '__main__':
-    load_config_with_overrides_and_run(
+    result = load_config_with_overrides_and_run(
         # overrides={
         #     "datamodule": DATASET_STR,
         #     "model": DATASET_STR,
@@ -51,3 +51,4 @@ if __name__ == '__main__':
         # overrides={},
         config_path="configs/config_cohmm.yaml",
     )
+    print(result)

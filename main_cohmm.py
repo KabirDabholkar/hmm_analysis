@@ -1115,11 +1115,6 @@ def main(cfg):
             test_student_in.implementation = 'log'
 
 
-
-
-
-
-
         # results_path = os.path.join(cfg.teacher_save_path, 'groundtruth')
         save_results_loc = results_path + '.csv'
         if not os.path.exists(os.path.dirname(save_results_loc)):
@@ -1139,7 +1134,8 @@ def main(cfg):
 
         # return result_data
         print('done saved')
-        return
+        print('returning',result_data)
+        return result_data
     print('done')
     return
 

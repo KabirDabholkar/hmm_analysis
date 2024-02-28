@@ -43,8 +43,8 @@ defaults:
 data_mode: student-teacher
 #data_mode: nlb
 
-#use_teacher_as_student: false
-use_teacher_as_student: true
+use_teacher_as_student: false
+#use_teacher_as_student: true
 
 initialise_student_as_teacher: false
 #initialise_student_as_teacher: true
@@ -55,7 +55,7 @@ emission_mode : bernoulli
 # for analysis only put save_trained: false, run_train: true with zero epochs to get the correct name
 run_train     : true
 save_trained  : true
-run_analysis  : false
+run_analysis  : true
 
 #training_framework  : hmmlearn
 training_framework  : dynamax
@@ -65,13 +65,13 @@ initialise_dynamax: false
 
 analysis:
   compute_similarity_metrics        : false
-  compute_latent_decoding_linear    : true
+  compute_latent_decoding_linear    : false
   compute_latent_decoding           : false
   compute_mutual_info               : false
   compute_latent_decoding_shuffled  : false
   plot_student_matrices             : false
   compute_k_shot                    : false
-  compute_co_smoothing              : false
+  compute_co_smoothing              : true
   compute_latent_decoding_stepwise  : false
   compute_fisher_info_matrix        : false
   compute_k_shot_jax                : false  # requires compute_fisher_info_matrix: true
