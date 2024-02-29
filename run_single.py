@@ -39,6 +39,7 @@ def load_config_with_overrides_and_run(
     ):
         print('config path', config_path.name)
         config = hydra.compose(config_name=config_path.name, overrides=overrides)
+
     return main(config)
     # print(OmegaConf.to_yaml(config))
 

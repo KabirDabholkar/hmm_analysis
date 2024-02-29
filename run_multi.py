@@ -54,7 +54,7 @@ search_space = {
 
 results = tune.run(
     train_func_partial,
-    num_samples=2,
+    num_samples=15,
     metric='original co-smoothing',
     mode='max',
     config={
