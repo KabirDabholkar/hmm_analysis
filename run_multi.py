@@ -37,6 +37,7 @@ mandatory_overrides = {
 #     print(config_path)
 
 def train_func(overrides={}, config_path="configs/config_cohmm.yaml"):
+    overrides = {**overrides,"student_index":int(tune.get_trial_id()[-5:])}
     results = load_config_with_overrides_and_run(overrides=overrides,config_path=config_path)
     tune.report(**results)
 
@@ -46,30 +47,26 @@ train_func_partial = tune.with_parameters(
     )
 
 search_space = {
-    **mandatory_overrides,
-    "dynamax.fit_kwargs.optimizer.learning_rate": tune.loguniform(1e-4, 1e-1).quantized(1e-4),
-    "dynamax.fit_kwargs.batch_size": tune.choice([5,10,50,100,250,500,750,1000]),
-    "dynamax.fit_kwargs.num_epochs": tune.randint(3,300),
-},
+        **mandatory_overrides,
+        "dynamax.fit_kwargs.optimizer.learning_rate": tune.loguniform(1e-4, 1e-1).quantized(1e-4),
+        "dynamax.fit_kwargs.batch_size" : tune.choice([5,10,50,100,250,500,750,1000]),
+        "dynamax.fit_kwargs.num_epochs" : tune.randint(3,300),
+        "student.n_components"          : tune.randint(1,17),
+    }
 
 results = tune.run(
     train_func_partial,
-    num_samples=15,
+    num_samples=1,
     metric='original co-smoothing',
     mode='max',
-    config={
-        **mandatory_overrides,
-        "dynamax.fit_kwargs.optimizer.learning_rate": tune.loguniform(1e-4, 1e-1).quantized(1e-4),
-        "dynamax.fit_kwargs.batch_size": tune.choice([5,10,50,100,250,500,750,1000]),
-        "dynamax.fit_kwargs.num_epochs": tune.randint(3,300),
-    },
+    config=search_space,
     progress_reporter=CLIReporter(
         metric_columns=['original co-smoothing'],
         sort_by_metric=True,
     ),
     search_alg=BasicVariantGenerator(random_state=0),
     resources_per_trial=dict(cpu=1, gpu=0),
-    max_concurrent_trials = 1,
+    # max_concurrent_trials = 1,
 )
 
 
