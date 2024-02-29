@@ -6,7 +6,7 @@ object:
 model_name: chain
 
 n_components: 5
-n_features: 20
+n_features: 70
 transmat_epsilon: 4e-2
 
 transmat_:

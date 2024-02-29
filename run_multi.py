@@ -18,13 +18,9 @@ from run_single import load_config_with_overrides_and_run
 # os.environ["XLA_FLAGS"] = ("--xla_cpu_multi_thread_eigen=false "
 #                            "intra_op_parallelism_threads=1")
 
-ray.init()
-print(
-    'available_resources',ray.available_resources()
-)
 
 mandatory_overrides = {
-    "student_subpath": "multirun/${dynamax.name}",
+    "student_subpath": "multirun/${dynamax.name}_ncomp${student.n_components}",
 }
 
 # def load_config_with_overrides_and_run(overrides={},config_path="configs/config_cohmm.yaml"):
@@ -37,7 +33,12 @@ mandatory_overrides = {
 #     print(config_path)
 
 def train_func(overrides={}, config_path="configs/config_cohmm.yaml"):
-    overrides = {**overrides,"student_index":int(tune.get_trial_id()[-5:])}
+    id_num = int(tune.get_trial_id()[-5:])
+    overrides = {
+        **overrides,
+        'student_index':id_num,
+        'numpy_seed.seed': id_num,
+    }
     results = load_config_with_overrides_and_run(overrides=overrides,config_path=config_path)
     tune.report(**results)
 

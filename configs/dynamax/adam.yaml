@@ -10,7 +10,7 @@ fit_kwargs:
     learning_rate : 1e-2
 #    momentum      : 0.15
   batch_size  : 200 #30 #300
-  num_epochs  : 0 # 100 #100 #80
+  num_epochs  : 100 # 100 #100 #80
   key         :
     _target_  : jax.random.PRNGKey
     seed      : 0

@@ -14,7 +14,7 @@ defaults:
   - decoding: logistic
 
 #######  Student ##########
-  - model@student: basic_multivariate_bernoulli
+  - model@student: chain_multivariate_bernoulli
 #  - model@student: chain_multivariate_poisson #basic_multivariate_poisson
 
 ####### Initial manipulation
@@ -58,9 +58,11 @@ emission_mode : bernoulli
 # for analysis only put save_trained: false, run_train: true with zero epochs to get the correct name
 run_train     : true
 save_trained  : true
+load_student_for_analysis: true
 run_analysis  : true
+save_results  : true
 
-#training_framework  : hmmlearn
+# training_framework  : hmmlearn
 training_framework  : dynamax
 
 #initialise_dynamax: true
@@ -68,12 +70,12 @@ initialise_dynamax: false
 
 analysis:
   compute_similarity_metrics        : false
-  compute_latent_decoding_linear    : false
+  compute_latent_decoding_linear    : true
   compute_latent_decoding           : false
   compute_mutual_info               : false
   compute_latent_decoding_shuffled  : false
   plot_student_matrices             : false
-  compute_k_shot                    : false
+  compute_k_shot                    : true
   compute_co_smoothing              : true
   compute_latent_decoding_stepwise  : false
   compute_fisher_info_matrix        : false
