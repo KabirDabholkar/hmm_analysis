@@ -2,3 +2,4 @@
 __pycache__
 .idea
 .DS_Store
+configs/path_to_save_files.yaml
