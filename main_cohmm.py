@@ -1,4 +1,4 @@
-import matplotlib.pyplot as plt
+
 from omegaconf import DictConfig, OmegaConf
 import hydra
 import os
@@ -16,7 +16,7 @@ from copy import deepcopy
 from utils import flatten_with_lengths,HMM_Dataset, normalise, setattrs, setattrs_kwargs, make_path_if_not_exist, lfads_torch_datamodule_to_numpy
 from metrics import bernoulli_bits_per_spike
 from hmm_adapter import CoHMM3d as CoHMM
-
+import matplotlib.pyplot as plt
 import matplotlib as mpl
 mpl.rcParams['text.usetex'] = True
 plt.rcParams["font.family"] = "serif"

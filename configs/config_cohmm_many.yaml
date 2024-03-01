@@ -37,6 +37,7 @@ defaults:
 
 #########################
   - path_to_save_files
+  - breakups
 
 ####### multirun ##########
 #  - hydra: multirun_cohmm
@@ -311,52 +312,6 @@ breakups_dictmodule:
 
 
 
-breakups:
-  fit:
-    train:
-      trials_split: train
-      neurons_split: [heldin,heldout]
-    val:
-      trials_split: val
-      neurons_split: [heldin,heldout]
-
-  k_shot_fit:
-    input:
-      trials_split: train
-      neurons_split: heldin
-    target:
-      trials_split: train
-      neurons_split: reallyheldout
-
-  k_shot_test:
-    input:
-      trials_split: test
-      neurons_split: heldin
-    target:
-      trials_split: test
-      neurons_split: reallyheldout
-
-  cosmoothing:
-    input:
-      trials_split: test
-      neurons_split: heldin
-    target:
-      trials_split: test
-      neurons_split: heldout
-
-  decoding:
-    fit:
-      input:
-        trials_split  : train
-        neurons_split : heldin
-      states:
-        trials_split  : train
-    test:
-      input:
-        trials_split  : test
-        neurons_split : heldin
-      states:
-        trials_split  : test
 ######### Analysis ##########
 
 
