@@ -1,0 +1,9 @@
+mode: MULTIRUN
+sweeper:
+    params:
+      student_index : 0,1,2,3,4,5 #,6,7,8 #9,10,11,12,13,14,15 #
+      student.n_components : 105 #80,90 #1,2,3,4,6,8,10,15 #,20 #,50
+      # student.n_iter: 100
+#      training_mode_choice: vanilla_sliced_mode, sliced_and_augmented_with_small_shifts #, augmented_with_shift_mode, augmented_mode, augmented_with_shift_repeatwithoutshift_mode #, #,  #,vanilla_mode,  #
+#      training_config_choice: training_augmented_with_shift_then_vanilla_frozen_te, training_vanilla, training_augmented_with_shift, training_augmented_with_shift_then_vanilla #training_augmented
+#      training_config_choice: training_vanilla #pretrain_vanilla_then_finetuning_emission_vanilla, pretrain_augmented_with_shift_then_finetuning_emission_vanilla  #, pretrain_augmented_then_finetuning_emission_vanilla

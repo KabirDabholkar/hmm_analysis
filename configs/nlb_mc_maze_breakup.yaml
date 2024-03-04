@@ -1,12 +1,25 @@
 length        : 35
-train_trials  : 1400
+# train_trials  : 1400
 #train_trials  : 400
-val_trials    : 121
-test_trials   : 200
+# val_trials    : 121
+# test_trials   : 200
+
+# train_trials  : 1600
+# val_trials    : 0
+# test_trials   : 121
+
+# train_trials  : 1721
+# val_trials    : 0
+# test_trials   : 0
+
+train_trials  : 2295
+val_trials    : 0
+test_trials   : 0
+
 
 #num_neurons_heldin        : 120
 #num_neurons_heldout       : 31
 #num_neurons_reallyheldout : 31
 num_neurons_heldin        : 137
-num_neurons_heldout       : 44
-num_neurons_reallyheldout : 1
+num_neurons_heldout       : 45
+num_neurons_reallyheldout : 0

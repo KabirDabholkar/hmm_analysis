@@ -1,1 +1,5 @@
 path_to_save_files: /Users/kabir/Documents/code/hmm_analysis
+dataset_path: /Users/kabir/Documents/datasets
+nlb_paths:
+  mc_maze: ${dataset_path}/000128/sub-Jenkins
+  mc_rtt: ${dataset_path}/000129/sub-Indy

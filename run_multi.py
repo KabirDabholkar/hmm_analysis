@@ -20,7 +20,7 @@ from run_single import load_config_with_overrides_and_run
 
 
 mandatory_overrides = {
-    "student_subpath": "multirun/${dynamax.name}_ncomp${student.n_components}",
+    "student_subpath": "multirun_nlb_em_erdosrenyi/${dynamax.name}_ncomp${student.n_components}",
 }
 
 # def load_config_with_overrides_and_run(overrides={},config_path="configs/config_cohmm.yaml"):
@@ -44,20 +44,23 @@ def train_func(overrides={}, config_path="configs/config_cohmm.yaml"):
 
 train_func_partial = tune.with_parameters(
         train_func,
-        config_path="configs/config_cohmm.yaml",
+        # config_path="configs/config_cohmm.yaml",
+        config_path="configs/config_cohmm_mc_maze.yaml",
     )
 
 search_space = {
         **mandatory_overrides,
-        "dynamax.fit_kwargs.optimizer.learning_rate": tune.loguniform(1e-4, 1e-1).quantized(1e-4),
-        "dynamax.fit_kwargs.batch_size" : tune.choice([5,10,50,100,250,500,750,1000]),
-        "dynamax.fit_kwargs.num_epochs" : tune.randint(3,300),
-        "student.n_components"          : tune.randint(1,17),
+        # "dynamax.fit_kwargs.optimizer.learning_rate" : tune.loguniform(1e-4, 1e-1).quantized(1e-4),
+        # "dynamax.fit_kwargs.batch_size" : tune.choice([5,10,50,100,250,500,750,1000]),
+        # "dynamax.fit_kwargs.num_epochs" : tune.randint(3,300),
+        "dynamax.fit_kwargs.num_iters" : tune.randint(10,100),
+        "student.n_components"         : tune.randint(30,200),
+        "student.erdos_renyi_probability" : tune.uniform(0.04,0.7),
     }
 
 results = tune.run(
     train_func_partial,
-    num_samples=1,
+    num_samples=60,
     metric='original co-smoothing',
     mode='max',
     config=search_space,
@@ -67,7 +70,7 @@ results = tune.run(
     ),
     search_alg=BasicVariantGenerator(random_state=0),
     resources_per_trial=dict(cpu=1, gpu=0),
-    # max_concurrent_trials = 1,
+    max_concurrent_trials = 5,
 )
 
 

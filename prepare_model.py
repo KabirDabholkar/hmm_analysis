@@ -2,6 +2,7 @@ from hmmlearn.hmm import GaussianHMM, CategoricalHMM, PoissonHMM
 import numpy as np
 from collections.abc import Iterable
 from sklearn.utils import check_random_state
+import networkx as nx
 
 
 def fit_model_emission(model,input_obs,target_obs,lengths=None):
@@ -202,11 +203,17 @@ def test_cohmm():
     # print(pred)
 
 
+def erdos_renyi_transmat(n,p):
+    return np.array(
+        nx.adjacency_matrix(
+            nx.erdos_renyi_graph(n, p, directed=True)
+        ).todense()
+    )
 
 if __name__ == '__main__':
     # GT = specify_groundtruth_state(10,10,
     #                           start_prob_dist=lambda shape: (np.arange(shape[0])>5).astype(float) )
-    test_cohmm()
+    # test_cohmm()
     # import matplotlib.pyplot as plt
     # from utils import indicator_func_to_matrix
     # plt.imshow(
@@ -217,5 +224,8 @@ if __name__ == '__main__':
     #     )
     # )
     # plt.show()
-
+    # G = nx.erdos_renyi_graph(10,0.5)
+    # print(G.adjacency())
+    # G.adj
+    print(erdos_renyi_transmat(10,0.5))
 
