@@ -1,0 +1,6 @@
+[submodule "hmmlearn"]
+	path = hmmlearn
+	url = https://github.com/KabirDabholkar/hmmlearn.git
+[submodule "config-utils"]
+	path = config-utils
+	url = https://github.com/nacloos/config-utils.git
