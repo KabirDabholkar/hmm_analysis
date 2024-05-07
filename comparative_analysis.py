@@ -2,6 +2,7 @@ import matplotlib.pyplot as plt
 from omegaconf import DictConfig, OmegaConf
 import hydra
 import os
+import scipy
 import pandas as pd
 import pickle as pkl
 from multiprocessing import Pool
@@ -32,13 +33,51 @@ mpl.rcParams['text.latex.preamble'] = r'\usepackage{amsmath}'
 
 CONFIG_PATH = "configs"
 # CONFIG_NAME = "config"
-CONFIG_NAME = "config_cohmm_mc_maze"
-path_to_models = '/home/kabird/ray_results/all_models_validated_v2/teacher_state4_poisson_partial_eps0.01_length35/combined_traintrials1600'
+# CONFIG_NAME = "config_cohmm_mc_maze"
+# path_to_models = '/home/kabird/ray_results/all_models_validated_v2/teacher_state4_poisson_partial_eps0.01_length35/combined_traintrials1600'
 
-# CONFIG_NAME = "config_cohmm"
-# path_to_models = '/Users/kabir/Documents/code/hmm_analysis/all_models_validated_v2/teacher_state4_bernoulli_partial_eps0.01_length10/models_traintrials2000'
+CONFIG_NAME = "config_cohmm"
+path_to_models = '/Users/kabir/Documents/code/hmm_analysis/all_models_validated_v2/teacher_state4_bernoulli_partial_eps0.01_length10/models_traintrials2000'
 dataframe_file_name = 'latents_dataframe.pkl'
+threshold = 2e-3
 
+def load_and_filternan_models_with_csvs():
+    saveloc = os.path.join(path_to_models, dataframe_file_name)
+    with open(saveloc, 'rb') as f:
+        latents_dataframe = pkl.load(f)
+    is_best = latents_dataframe.co_bps > (latents_dataframe.co_bps.max() - threshold)
+    print('Latents dataframe len', len(latents_dataframe))
+    print(latents_dataframe.columns)
+    print('Num best models', is_best.sum())
+
+    all_files = os.listdir(path_to_models)
+
+    model_files = [f for f in all_files if (f[-4] != '.' and f[-3] != '.')]
+    # model_files = model_files[:4]
+
+    models = []
+    model_datas = []
+    for f in model_files:
+        full_path = os.path.join(path_to_models, f)
+        with open(full_path, 'rb') as _f:
+            models.append(pkl.load(_f))
+
+        full_path = full_path + '.csv'
+
+        model_data = pd.read_csv(full_path) if os.path.exists(full_path) else None
+
+        model_datas.append(model_data)
+    print('Loaded', len(models), 'models.')
+    filtered_models, model_datas = zip(
+        *[(m, d) for m, d in zip(models, model_datas) if not np.any(np.isnan(m.transmat_))])
+    print('Removed', len(models) - len(filtered_models), 'models with NaN params.')
+    models = filtered_models
+
+    print('Num models:', len(model_datas))
+    model_datas = pd.concat(model_datas, axis=0).reset_index().drop(columns=['iterations'])  # ['6-shot co-smoothing']
+    model_datas['is_best'] = is_best
+    csv_path = os.path.join(path_to_models, 'concat_model_data.csv')
+    model_datas.to_csv(csv_path)
 
 @hydra.main(version_base='1.3', config_path=CONFIG_PATH, config_name=CONFIG_NAME)
 def load_models_and_store_latents(cfg):
@@ -307,8 +346,18 @@ def plot_cross_decoding_scores():
     fig.savefig(os.path.join(path_to_models, 'scores_histogram.png'))
 
 
+def convert_cross_decoding_scores_to_matlab():
+    saveloc = os.path.join(path_to_models, 'cross_decoding_scores_parallel.npy')
+    scores = np.load(saveloc)
+    print(scores)
+    saveloc = os.path.join(path_to_models, 'cross_decoding_scores.mat')
+    scipy.io.savemat(saveloc, {'scores': scores})
+
+
 if __name__ == '__main__':
     # load_models_and_store_latents()
     # plotting()
     # cross_decoding()
     # plot_cross_decoding_scores()
+    # convert_cross_decoding_scores_to_matlab()
+    load_and_filternan_models_with_csvs()

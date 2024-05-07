@@ -18,7 +18,7 @@ from utils import flatten_with_lengths, HMM_Dataset, normalise, setattrs, setatt
 from metrics import bernoulli_bits_per_spike
 from hmm_adapter import CoHMM3d as CoHMM
 from nlb_tools.make_tensors import make_eval_input_tensors, make_train_input_tensors, save_to_h5, \
-    make_eval_target_tensors
+    make_eval_target_tensors, h5_to_dict
 from nlb_tools.evaluation import evaluate
 
 import matplotlib.pyplot as plt
@@ -32,8 +32,8 @@ mpl.rcParams['text.latex.preamble'] = r'\usepackage{amsmath}'
 import prepare_model
 
 CONFIG_PATH = "configs"
-# CONFIG_NAME = "config"
-CONFIG_NAME = "config_cohmm_mc_maze"
+CONFIG_NAME = "config_cohmm"
+# CONFIG_NAME = "config_cohmm_mc_maze"
 
 
 @hydra.main(version_base='1.3', config_path=CONFIG_PATH, config_name=CONFIG_NAME)
@@ -44,6 +44,7 @@ def decorated_main(cfg):
 def main(cfg):
     omegaconf_resolvers()
     print('starting')
+
     instantiate(cfg.numpy_seed)
     if cfg.data_mode == 'student-teacher':
         teacher = instantiate(cfg.teacher)
@@ -94,9 +95,7 @@ def main(cfg):
             def load_h5_to_dict(path):
                 D = {}
                 with h5py.File(path, "r") as f:
-                    print(f.keys())
-                    for key in f.keys():
-                        D[key] = f[key][()]
+                    D = h5_to_dict(f)
                 return D
 
             train_dict = load_h5_to_dict(train_save_path)
@@ -915,7 +914,7 @@ def main(cfg):
             )
 
             test_student = deepcopy(student)
-            test_student_in, test_student_reallyout = split_model_emission(test_student, split_indices=instantiate(
+            test_student_in, test_student_out = split_model_emission(test_student, split_indices=instantiate(
                 cfg.neurons_split_indices)[0:1])
             print('input shape', data.select(**cfg.breakups.k_shot_fit.input).shape)
             test_student_in.implementation = 'scaling'
@@ -923,6 +922,11 @@ def main(cfg):
             Y = data.select(**cfg.breakups.k_shot_fit.input)
             Y_heldout = data.select(**cfg.breakups.k_shot_fit.target)
             posteriors = test_student_in.predict_proba(Y, mode3d=True)
+
+            Y_test = data.select(**cfg.breakups.k_shot_test.input)
+            Y_heldout_test = data.select(**cfg.breakups.k_shot_test.target)
+            posteriors_test = test_student_in.predict_proba(Y_test, mode3d=True)
+
             # posteriors = (log_posteriors)
             # posteriors = posteriors/posteriors.sum(-1,keepdims=True)
             # print('posteriors.shape',posteriors.shape)
@@ -948,7 +952,7 @@ def main(cfg):
             #     jnp.array(Y_heldout.values[trial_ids].reshape(-1,Y_heldout.shape[-1])),
             #     jnp.array(posteriors[trial_ids].reshape(-1,posteriors.shape[-1]))
             # ))
-            lambdas_inf = test_student_reallyout.lambdas_
+            lambdas_inf = teacher_reallyheldout.lambdas_
             print(
                 jnp.array(Y_heldout.values).shape,
                 jnp.array(posteriors).shape,
@@ -986,6 +990,13 @@ def main(cfg):
                 jnp.array(posteriors),
                 jnp.array(lambdas_inf)
             )
+            bs = posteriors.shape[0]
+            FI2 = funcs['batch_fisher_info2'](
+                jnp.array(Y_heldout.values)[:6*(bs//6)].reshape(bs//6,6,*Y_heldout.shape[1:]),
+                jnp.array(posteriors)[:6*(bs//6)].reshape(bs//6,6,*posteriors.shape[1:]),
+                jnp.array(lambdas_inf)
+            )
+
             hessian = funcs['batch_hessian'](
                 jnp.array(Y_heldout.values),
                 jnp.array(posteriors),
@@ -1004,10 +1015,19 @@ def main(cfg):
             if not cond > 1e12:
                 factor = np.trace(hessian @ np.linalg.inv(FI))  # + 1e-3 * np.eye(hessian.shape[0])))
                 diag_factor = (np.diag(hessian) / np.diag(FI)).sum()
-
             result_data['trace factor'] = factor
             result_data['diag trace factor'] = diag_factor
-            print('trace factor', factor, diag_factor)
+
+            cond = np.linalg.cond(FI2)
+            print(cond)
+            factor2 = None
+            diag_factor2 = None
+            if cond < 1e17:
+                factor2 = np.trace(hessian @ np.linalg.inv(FI2)) # + 1e-3 * np.eye(hessian.shape[0])))
+                diag_factor2 = (np.diag(hessian) / np.diag(FI2)).sum()
+            result_data['trace factor 2'] = factor2
+            result_data['diag trace factor 2'] = diag_factor2
+            print('trace factor2', factor2, diag_factor2)
 
             # fig,ax = plt.subplots(figsize=(5,5))
             # ax.scatter(hess.flatten(),hess3.flatten() ,s=3)
@@ -1047,14 +1067,19 @@ def main(cfg):
             # fig.savefig('plots/test_plots/hessian_imshow.png',dpi=300)
             # plt.show()
 
-            # print( )
+
+
+
             if cfg.analysis.compute_k_shot_jax:
-                K_range = np.logspace(0.5, 2, 15).astype(int)
+                K_range = 2**(np.arange(2,10)).astype(int) #np.logspace(0.5, 2, 15).astype(int)[:2]
                 repeats = cfg.train_trials // K_range // 2
                 # repeats = 10
                 # K = 5
                 all_loss_values = []
+                numeric_losses = {}
+                analytical_losses = {}
                 for reps, K in list(zip(repeats, K_range)):
+                    print(f'Computing jax {K}shot MLE')
                     trial_ids = np.random.choice(Y_heldout.shape[0], size=(reps, K))
                     print(Y_heldout.values[trial_ids].shape)
                     # print()
@@ -1065,8 +1090,8 @@ def main(cfg):
                     ))
                     # print(lambdas_K.shape)
                     loss_values = batch_batch_bernoulli_loglikelihood_loss(
-                        jnp.array(Y_heldout.values),
-                        jnp.array(posteriors),
+                        jnp.array(Y_heldout_test.values),
+                        jnp.array(posteriors_test),
                         jnp.array(lambdas_K)
                     )
                     all_loss_values += [loss_values / Y_heldout.shape[0]]
@@ -1074,18 +1099,77 @@ def main(cfg):
                     result_data[score_name] = -np.nanmean(loss_values / Y_heldout.shape[0])
                     # print(loss_values/Y_heldout.shape[0]/cfg.length)
 
-            ### verifying taylor
-            #
-            # delta_phi = (lambdas_K-lambdas_inf[None]).reshape(lambdas_K.shape[0],-1)
-            # print(delta_phi.shape)
-            # rhs1 = loss_value / Y_heldout.shape[0] + (0.5 * delta_phi[:, None, :] @ hess [None] @ delta_phi[:, :, None])[:, 0, 0]
-            # rhs2 = loss_value / Y_heldout.shape[0] + (0.5 * delta_phi[:, None, :] @ hess2[None] @ delta_phi[:, :, None])[:, 0, 0]
-            # rhs3 = loss_value / Y_heldout.shape[0] + (0.5 * delta_phi[:, None, :] @ hess3[None] @ delta_phi[:, :, None])[:, 0, 0]
-            # lhs = loss_values/Y_heldout.shape[0]
+                    ## verifying taylor
 
-            # print('lhs',lhs)
-            # print('rhs',rhs)
+                    delta_phi = (lambdas_K-lambdas_inf[None]).reshape(lambdas_K.shape[0],-1)
+                    print(delta_phi.shape)
+                    # rhs1 = loss_value / Y_heldout.shape[0] + (0.5 * delta_phi[:, None, :] @ hess [None] @ delta_phi[:, :, None])[:, 0, 0]
+                    # rhs2 = loss_value / Y_heldout.shape[0] + (0.5 * delta_phi[:, None, :] @ hess2[None] @ delta_phi[:, :, None])[:, 0, 0]
+                    # rhs3 = loss_value / Y_heldout.shape[0] + (0.5 * delta_phi[:, None, :] @ hess3[None] @ delta_phi[:, :, None])[:, 0, 0]
+                    eye = np.eye(hessian.shape[0])
+                    analytical = -loss_value / Y_heldout.shape[0] - (0.5 * delta_phi[:, None, :] @ (hessian*eye)[None] @ delta_phi[:, :, None])[:, 0, 0]
+                    numerical = -loss_values / Y_heldout.shape[0]
 
+                    # print('loss_value',loss_value)
+                    # print('mean k shot loss_values', loss_values.mean())
+                    print('numerical',numerical.mean())
+                    print('analytic', analytical.mean())
+                    print('norm',np.linalg.norm(delta_phi,axis=-1).mean())
+                    numeric_losses[K] = numerical
+                    analytical_losses[K] = analytical
+
+
+            print(Y_heldout.values.reshape(-1, Y_heldout.shape[-1]).shape,posteriors.reshape(-1, posteriors.shape[-1]).shape)
+            compute_MLE = funcs['compute_MLE']
+            lambdas_full = np.array(compute_MLE(
+                jnp.array(Y_heldout.values.reshape(-1, Y_heldout.shape[-1])),
+                jnp.array(posteriors.reshape(-1, posteriors.shape[-1]))
+            ))
+
+            loss_value_MLEfull = batch_bernoulli_loglikelihood_loss(
+                jnp.array(Y_heldout.values),
+                jnp.array(posteriors),
+                jnp.array(lambdas_full)
+            )
+
+            loss_value_true = batch_bernoulli_loglikelihood_loss(
+                jnp.array(Y_heldout.values),
+                jnp.array(posteriors),
+                jnp.array(lambdas_inf)
+            )
+
+            fig,ax = plt.subplots()
+            for K in numeric_losses.keys():
+                ax.scatter(numeric_losses[K],analytical_losses[K],label=fr'$K={K}$',s=15)
+            ax.set_xlabel(r'$L(B_K)$')
+            ax.set_ylabel(r'$L(B^*)+\frac{1}{2}(B_K-B^*)^TH(B_K-B^*)$')
+            ax.set_aspect('equal')
+            ax.legend()
+            ax.plot([-300,-250],[-300,-250],ls='dashed',c='black')
+            fig.tight_layout()
+            fig.savefig('plots/test_plots/numerical_vs_analytical_losses.png',dpi=300)
+
+
+            print('loss_value_MLEfull',-loss_value_MLEfull/Y_heldout.values.shape[0])
+            print('loss_value_true', -loss_value_true / Y_heldout.values.shape[0])
+            print('lambdas_K shape',lambdas_K.shape)
+            print('lambdas_inf shape', lambdas_inf.shape)
+            print('lambdas_full shape', lambdas_full.shape)
+
+            fig, ax = plt.subplots()
+            ax.scatter(lambdas_full, lambdas_inf)
+            ax.set_xlabel('lambdas_full')
+            ax.set_ylabel('lambdas_inf')
+            ax.set_aspect('equal')
+            fig.savefig('plots/test_plots/fullMLE_and_groundtruth.png')
+            plt.close(fig)
+
+            fig,ax = plt.subplots()
+            ax.scatter(lambdas_K.mean(0),lambdas_inf)
+            ax.set_xlabel('lambdas_K')
+            ax.set_ylabel('lambdas_inf')
+            ax.set_aspect('equal')
+            fig.savefig('plots/test_plots/mean_of_kshot_and_groundtruth.png')
             # fig, ax = plt.subplots()
             # ax.scatter(lhs.flatten(), rhs1.flatten(), s=10, c='C0')
             # ax.scatter(lhs.flatten(), rhs2.flatten(), s=10, c='C1')

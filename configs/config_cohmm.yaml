@@ -46,8 +46,8 @@ defaults:
 data_mode: student-teacher
 #data_mode: nlb
 
-use_teacher_as_student: false
-#use_teacher_as_student: true
+#use_teacher_as_student: false
+use_teacher_as_student: true
 
 initialise_student_as_teacher: false
 #initialise_student_as_teacher: true
@@ -70,16 +70,17 @@ initialise_dynamax: false
 
 analysis:
   compute_similarity_metrics        : false
-  compute_latent_decoding_linear    : true
+  compute_latent_decoding_linear    : false
+  generate_submission               : false
   compute_latent_decoding           : false
   compute_mutual_info               : false
   compute_latent_decoding_shuffled  : false
   plot_student_matrices             : false
-  compute_k_shot                    : true
+  compute_k_shot                    : false
   compute_co_smoothing              : true
   compute_latent_decoding_stepwise  : false
-  compute_fisher_info_matrix        : false
-  compute_k_shot_jax                : false  # requires compute_fisher_info_matrix: true
+  compute_fisher_info_matrix        : true
+  compute_k_shot_jax                : true  # requires compute_fisher_info_matrix: true
 
 jax_MLE_func:
   _target_  : hmm_fisher_info.batch_compute_${emission_mode}_MLE

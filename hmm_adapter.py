@@ -4,8 +4,6 @@ from typing import Optional, Union, Any
 from utils import flatten_with_lengths
 from config_utils.dict_module import DictModule
 
-import hmmlearn.base
-
 accepted_types = Union[np.ndarray,xr.DataArray]
 
 # self.adapter_specs = [

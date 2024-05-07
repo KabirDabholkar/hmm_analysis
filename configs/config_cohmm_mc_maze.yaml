@@ -8,7 +8,8 @@ defaults:
 ##### datamodule ##########
   # - default_breakup
   - nlb_mc_maze_breakup
-  - datamodule: nlb_mc_maze
+#  - datamodule: nlb_mc_maze
+  - load_dataset: mc_maze_20
 
 #### decoding ####
   - decoding: logistic
@@ -196,29 +197,7 @@ numpy_to_xarray_with_breakdownlabels_states:
                                             ${listmul:test,${test_trials}}}}
 
 
-##############
 
-load_dataset:
-  datapath: ${nlb_paths.mc_maze}
-  bin_size: 20
-  phase   : val
-  dataset_name : mc_maze
-  dataset:
-    _target_ : nlb_tools.nwb_interface.NWBDataset
-    fpath    : ${..datapath}
-    skip_fields :
-      - hand_pos
-      - cursor_pos
-      - eye_pos
-      - muscle_vel
-      - muscle_len
-      - joint_vel
-      - joint_ang
-      - force
-  preprocess :
-    - method_name: resample
-      args:
-        - ${...bin_size}
 
 ###### Dict config generate ########
 

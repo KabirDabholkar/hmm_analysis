@@ -26,6 +26,16 @@ batch_compute_poisson_MLE = compose(
     vmap(compute_poisson_MLE,(0,0),0),
 )
 
+def summify(func,axis=None):
+    # def sum_func(*args):
+    #     return np.sum(func(*args),axis=axis)
+
+    return compose(np.sum,func)
+
+def meanify(func,axis=None):
+    # def mean_func(*args):
+    #     return np.mean(func(*args),axis=axis)
+    return compose(np.mean,func)
 
 def bernoulli_neg_log_likelihood(rates, spikes,eps=1e-9):
     # rates_spiked_only_nonzero = rates * spikes
@@ -74,6 +84,14 @@ def get_fisher_info_func(batch_grad):
         return (grads[:,:,None] @ grads[:,None,:]).mean(0)
     return fisher_info
 
+def get_kshot_fisher_info_func(grad_of_batch_LLH):
+    def fisher_info(Y_heldout, posteriors, phi):
+        grads = grad_of_batch_LLH(Y_heldout, posteriors, phi)
+        grads = grads.reshape(grads.shape[0],-1)
+        return (grads[:,:,None] @ grads[:,None,:]).mean(0)
+    return fisher_info
+
+
 bernoulli_loglikelihood_loss,poisson_loglikelihood_loss = [
     get_loglikelihood_loss(func)
     for func in [bernoulli_neg_log_likelihood,poission_neg_log_likelihood]
@@ -88,21 +106,31 @@ for key,func in zip(['bernoulli','poisson'],[bernoulli_neg_log_likelihood,poissi
     function_dict[key]['batch_loglikelihood_loss'] = batchify_over_samples_loglikelihood_loss(
                                                         function_dict[key]['loglikelihood_loss']
                                                     )
+    # function_dict[key]['batch2loglikelihood_loss'] = batchify_over_samples_loglikelihood_loss(
+    #         summify(
+    #             function_dict[key]['batch_loglikelihood_loss']
+    #         )
+    #     )
+
     function_dict[key]['batch_batch_loglikelihood_loss'] = batchify_over_params_loglikelihood_loss(
-                                                            function_dict[key]['batch_loglikelihood_loss']
-                                                        )
+                                                function_dict[key]['batch_loglikelihood_loss']
+                                            )
     function_dict[key]['value_and_grad_batch_loglikelihood_loss'] = vmap(
         function_dict[key]['batch_loglikelihood_loss'],
         (None,None,0),0
     )
     function_dict[key]['individual_grad'] = grad(function_dict[key]['loglikelihood_loss'],argnums=2)
+    function_dict[key]['grad_of_batch_LLH'] = grad(function_dict[key]['batch_loglikelihood_loss'],argnums=2)
+    function_dict[key]['batch_of_grad_of_batch_LLH'] = vmap(function_dict[key]['grad_of_batch_LLH'], (0,0,None),0)
+
     function_dict[key]['batch_grad'] = vmap(function_dict[key]['individual_grad'], (0, 0, None), 0)
     function_dict[key]['indiv_hessian'] = hessian(function_dict[key]['loglikelihood_loss'],argnums=2)
     function_dict[key]['batch_hessian'] = compose(
-                                                partial(np.mean,axis=0),
-                                                vmap(function_dict[key]['indiv_hessian'],(0,0,None),0)
-                                            )
+                                    partial(np.mean,axis=0),
+                                    vmap(function_dict[key]['indiv_hessian'],(0,0,None),0)
+                                )
     function_dict[key]['batch_fisher_info'] = get_fisher_info_func(function_dict[key]['batch_grad'])
+    function_dict[key]['batch_fisher_info2'] = get_fisher_info_func(function_dict[key]['batch_of_grad_of_batch_LLH'])
 
 
 function_dict['bernoulli']['compute_MLE'] = compute_bernoulli_MLE
@@ -133,8 +161,51 @@ batch_real_hess = compose(
 )
 
 def main():
-    pass
+    # grad_of_batch_LLH = function_dict['bernoulli']['grad_of_batch_LLH']
+    LLH = function_dict['bernoulli']['loglikelihood_loss']
 
+    posteriors = np.ones((3)) / 3
+    phi = np.ones((3))/3
+    obs = np.zeros((1),dtype=bool)
+    print(
+        LLH(obs,posteriors,phi)
+    )
+
+    batch_LLH = function_dict['bernoulli']['batch_loglikelihood_loss']
+    posteriors = np.ones((2,3)) / 3
+    phi = np.ones((3))
+    obs = np.zeros((2), dtype=bool)
+    print(
+        batch_LLH(obs, posteriors, phi)
+    )
+
+    posteriors = np.ones((2, 3)) / 3
+    phi = np.ones((3))
+    obs = np.zeros((2), dtype=bool)
+    print(
+        function_dict[key]['grad_of_batch_LLH'](obs, posteriors, phi).shape
+    )
+
+    posteriors = np.ones((4,2,3)) / 3
+    phi = np.ones((3))
+    obs = np.zeros((4,2), dtype=bool)
+    print(
+        function_dict[key]['batch_of_grad_of_batch_LLH'](obs, posteriors, phi).shape
+    )
+
+    obs = np.zeros((4, 2), dtype=bool)  # batch_outside_grad
+    posteriors = np.ones((4,2,5)) / 5   #(batch_outside_grad, batch_inside_grad, num_states)
+    phi = np.ones((5))
+    print(
+        function_dict[key]['batch_fisher_info2'](obs, posteriors, phi).shape
+    )
+
+    obs = np.zeros((4, 2, 10), dtype=bool)  # batch_outside_grad, batch_inside_grad, num_neurons
+    posteriors = np.ones((4,2,5)) / 5   #(batch_outside_grad, batch_inside_grad, num_states)
+    phi = np.ones((5,10)) # (num_states,num_neurons)
+    print(
+        function_dict[key]['batch_fisher_info2'](obs, posteriors, phi).shape
+    )
 
 if __name__ == '__main__':
     main()

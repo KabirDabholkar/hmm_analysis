@@ -12,7 +12,10 @@ length        : 35
 # val_trials    : 0
 # test_trials   : 0
 
-train_trials  : 2295
+train_trials_options  :
+  test  : 2295
+  val   : 1721
+train_trials  : ${train_trials_options.${load_dataset.phase}}
 val_trials    : 0
 test_trials   : 0
 
