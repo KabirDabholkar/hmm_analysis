@@ -6,24 +6,24 @@ hydra-joblib-launcher==1.2.0
 nexusformat==1.0.4
 matplotlib==3.7.2
 matplotlib-inline==0.1.6
-netCDF4==1.6.4
+# netCDF4==1.6.4
 networkx==3.2.1
 nlb-tools==0.0.3
-numpy==1.25.2
+#numpy==1.25.2
+numpy==1.26.3
 optax==0.1.9
 pandas==1.3.4
 Pillow==10.0.0
 ray[tune]==2.1.0
-"pydantic<2"
 scikit-image==0.22.0
 scikit-learn==1.3.0
 scipy==1.11.1
 seaborn==0.12.2
-similarity @ git+https://github.com/nacloos/similarity-measures.git@778f56e8211523288b1fb758264909942ead3c76
+# similarity @ git+https://github.com/nacloos/similarity-measures.git@778f56e8211523288b1fb758264909942ead3c76
 sympy==1.12
 tensorboard==2.16.2
 tensorboard-data-server==0.7.2
 tensorboardX==2.6.2.2
-tensorflow-probability==0.23.0
+# tensorflow-probability==0.23.0
 tqdm==4.66.1
 xarray==2022.3.0
