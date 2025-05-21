@@ -21,4 +21,4 @@ Uncommenting the following line
   - hydra: multirun_cohmm
 ```
 in `configs/config_simply.yaml` and running `python main_cohmm.py` will train many models of various sizes.
-Results are stored in 'all'
+Results are stored in a directory 'all_models_validated_v2', by default.
