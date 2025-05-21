@@ -1,0 +1,48 @@
+def perturbation(perturbation_num, epsilon, initial_probs, transition_matrix, emissions_means, emissions_cov):
+    key = jr.PRNGKey(perturbation_num)
+    initial_probs += jr.uniform(key, shape=(true_num_states,))
+    initial_probs = initial_probs / jnp.sum(initial_probs)
+    
+    rn  = lambda x : np.random.uniform(-x, x)
+    p   = rn(epsilon) * jnp.eye(true_num_states) \
+        + rn(epsilon) * jnp.roll(jnp.eye(true_num_states), 1, axis=1) \
+        + rn(epsilon) / true_num_states
+    transition_matrix   += p
+    transition_matrix   = jnp.clip(transition_matrix, 0, None) # Ensures non-negativity
+    transition_matrix   = normalize(transition_matrix)
+
+    emissions_means += np.random.normal(-epsilon, epsilon, emission_means.shape) 
+
+    emissions_cov   += np.random.normal(0, epsilon) * jnp.eye(EMISSION_DIM)[None, :, :]
+
+    return initial_probs, transition_matrix, emission_means, emissions_cov
+
+    
+
+def initial(): 
+    'Specify initial parameters of the HMM' # TODO change to if Model is not set. if set - transition matrix = model.transition, etc.
+    key = jr.PRNGKey(0)  # Random seed
+    initial_probs = jr.uniform(key, shape=(true_num_states,),  minval=0)
+    initial_probs = initial_probs / jnp.sum(initial_probs)
+
+    # initial_probs = jnp.ones(true_num_states) / true_num_states
+
+    rn = lambda x : np.random.uniform(-x, x)
+    transition_matrix   = (0.80 + rn(epsilon)) * jnp.eye(true_num_states) \
+                        + (0.15 + rn(epsilon)) * jnp.roll(jnp.eye(true_num_states), 1, axis=1) \
+                        + (0.05 + rn(epsilon)) / true_num_states
+    transition_matrix   = jnp.clip(transition_matrix, 0, None) # Ensures non-negativity
+    transition_matrix   = normalize(transition_matrix)
+    
+    
+    #TODO STUDY covariance and means matrix rules to generalize randomization properly for covariance and means
+    emission_means = jnp.column_stack([
+            0.1*jnp.cos(jnp.linspace(0, 2 * jnp.pi, true_num_states + 1))[:-1],
+            0.*jnp.sin(jnp.linspace(0, 2 * jnp.pi, true_num_states + 1))[:-1],
+            jnp.zeros((true_num_states, EMISSION_DIM - 2))
+        ])
+    emission_covs   = jnp.tile(0.1**2 * jnp.eye(EMISSION_DIM), (true_num_states, 1, 1))
+    
+
+
+    return initial_probs, transition_matrix, emission_means, emission_covs

@@ -5,3 +5,5 @@ __pycache__
 configs/path_to_save_files.yaml
 *.h5
 nlb_submissions
+outputs
+multirun

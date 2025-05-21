@@ -1,3 +1,8 @@
+Clone the repository.
+```sh
+git clone --recurse-submodules https://github.com/KabirDabholkar/hmm_analysis.git
+```
+
 ```sh
 conda create -n hmm_analysis python=3.9
 conda activate hmm_analysis
