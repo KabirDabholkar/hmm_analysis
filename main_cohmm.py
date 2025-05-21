@@ -32,8 +32,9 @@ mpl.rcParams['text.latex.preamble'] = r'\usepackage{amsmath}'
 import prepare_model
 
 CONFIG_PATH = "configs"
-CONFIG_NAME = "config_cohmm"
+# CONFIG_NAME = "config_cohmm"
 # CONFIG_NAME = "config_cohmm_mc_maze"
+CONFIG_NAME = "config_simple"
 
 
 @hydra.main(version_base='1.3', config_path=CONFIG_PATH, config_name=CONFIG_NAME)

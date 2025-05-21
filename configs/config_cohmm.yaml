@@ -79,8 +79,8 @@ analysis:
   compute_k_shot                    : false
   compute_co_smoothing              : true
   compute_latent_decoding_stepwise  : false
-  compute_fisher_info_matrix        : true
-  compute_k_shot_jax                : true  # requires compute_fisher_info_matrix: true
+  compute_fisher_info_matrix        : false
+  compute_k_shot_jax                : false  # requires compute_fisher_info_matrix: true
 
 jax_MLE_func:
   _target_  : hmm_fisher_info.batch_compute_${emission_mode}_MLE
