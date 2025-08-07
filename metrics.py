@@ -2,7 +2,14 @@ import numpy as np
 import logging
 logger = logging.getLogger(__name__)
 
+from scipy.stats import entropy
+from scipy.special import rel_entr,kl_div
 
+def cross_entropy(pk,qk,base=None):
+    return entropy(pk, base=base) + entropy(pk, qk, base=base)
+
+def kl_divergence(pk,qk,axis=0):
+    return rel_entr(pk,qk).sum(axis=axis)
 
 def self_consistency_score(model,X_lengths,window_length=10,eps=1e-3):
     X_val, lengths_val = X_lengths
@@ -136,3 +143,14 @@ def bernoulli_bits_per_spike(rates, spikes, zero_warning=True):
         zero_warning=zero_warning
     )
     return (nll_null - nll_model) / np.nansum(spikes) / np.log(2)
+
+
+if __name__ == "__main__":
+    eps = 1e-15
+    p = np.arange(10,dtype=float) + eps
+    q = np.arange(0,10,dtype=float)[::-1] + eps
+    p /= p.sum()
+    q /= q.sum()
+    print(cross_entropy(p,q))
+    print(rel_entr(p,q))
+    print(kl_div(p,q))

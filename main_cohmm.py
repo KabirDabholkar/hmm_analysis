@@ -685,11 +685,12 @@ def main(cfg):
                 pred_r = getattr(model, cfg.decoding.predict_method)(proba_teacher_r)
 
                 metric = instantiate(cfg.decoding.metric)
-                score = np.stack([metric(
-                    proba_student_r[i],
-                    pred_r[i]
-                ) for i in range(pred_r.shape[0])]).mean()
-
+                print(proba_student_r[0].shape,pred_r[0].shape,y.shape)
+                # score = np.stack([metric(
+                #     proba_student_r[i],
+                #     pred_r[i]
+                # ) for i in range(pred_r.shape[0])]).mean()
+                score = metric(proba_student_r.T,pred_r.T).mean() # assuming pmf along axis=0
                 print(name, 'decoding score', score)
                 result_data['linear_decoder_' + name] = score
 

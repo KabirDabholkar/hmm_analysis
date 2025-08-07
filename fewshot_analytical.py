@@ -158,14 +158,14 @@ class BinomialMLE():
 # loss = lambda pred,target: np.mean((pred - target)**2)
 # signal_generator = partial(make_gaussian_signal,x_dim = 1,sig_x=1)
 # ModelClass = LinearRegression
-# sigExtra = [0.1, 1]
+# sigExtras = [0.1, 1]
 # encoders = [
-#     partial(concatnoise_encoder,n_dim = 2,sigExtra=sigExtra[j])
-#     for j in range(len(choice_range))
+#     partial(concatnoise_encoder,n_dim = 2,sigExtra=sigExtras[j])
+#     for j in range(len(sigExtras))
 # ]
 # labels=[
-#     r'$\sigma_\text{ext}(z)=$' + f'{sigExtra[j]:.1f}'
-#     for j in range(len(choice_range))
+#     r'$\sigma_\text{ext}(z)=$' + f'{sigExtras[j]:.1f}'
+#     for j in range(len(sigExtras))
 # ]
 
 # encoder_type = "randposition"
@@ -405,11 +405,11 @@ for sigext in sigExtras:
 #     rf'$\sigma_{{\text{{ext}}}}={sigExtra[j]:.1f}$'
 #     for j in range(len(sigExtra))
 # ]
-#
-#
+
+
 # theory_k = np.logspace(1,2,100)
 # gamma = (M+1)/theory_k
-#
+
 # theory = [
 #     (
 #         theory_k,
@@ -562,7 +562,7 @@ for j,encoder in enumerate(encoders):
 # plt.close()
 
 
-plt.figure(figsize=np.array((4, 3))*0.8)
+plt.figure(figsize=np.array((4, 3))*0.6)
 
 # First subplot
 # Generate graded shades of blue

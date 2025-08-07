@@ -5,5 +5,8 @@ preprocess_target:
   _target_  : utils.batch_choice
   _partial_ : true
 metric  :
-  _target_ : scipy.special.rel_entr
+  # _target_ : scipy.special.rel_entr
+  # _target_  : scipy.stats.entropy
+  # _target_  : metrics.cross_entropy
+  _target_  : metrics.kl_divergence
   _partial_ : true

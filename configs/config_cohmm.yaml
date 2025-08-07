@@ -46,8 +46,8 @@ defaults:
 data_mode: student-teacher
 #data_mode: nlb
 
-#use_teacher_as_student: false
-use_teacher_as_student: true
+use_teacher_as_student: false
+#use_teacher_as_student: true
 
 initialise_student_as_teacher: false
 #initialise_student_as_teacher: true
