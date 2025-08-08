@@ -6,6 +6,49 @@ from collections.abc import Iterable
 import numpy as np
 import os
 
+def convert_to_int_string(s: str) -> str:
+    try:
+        # Attempt to convert to float, then to integer
+        num = float(s)
+        return str(int(num))  # Convert to integer, then back to string
+    except ValueError:
+        # If not numeric, return the original string
+        return s
+
+def flatten(dictionary, level=[]):
+    """
+    Copied from Andrew Sedler's lfads_torch.utils
+    --------------------------------
+
+    Flattens a dictionary by placing '.' between levels.
+    This function flattens a hierarchical dictionary by placing '.'
+    between keys at various levels to create a single key for each
+    value. It is used internally for converting the configuration
+    dictionary to more convenient formats. Implementation was
+    inspired by `this StackOverflow post
+    <https://stackoverflow.com/questions/6037503/python-unflatten-dict>`_.
+    Parameters
+    ----------
+    dictionary : dict
+        The hierarchical dictionary to be flattened.
+    level : str, optional
+        The string to append to the beginning of this dictionary,
+        enabling recursive calls. By default, an empty string.
+    Returns
+    -------
+    dict
+        The flattened dictionary.
+    """
+
+    tmp_dict = {}
+    for key, val in dictionary.items():
+        if type(val) == dict:
+            tmp_dict.update(flatten(val, level + [key]))
+        else:
+            tmp_dict[".".join(level + [key])] = val
+    return tmp_dict
+
+
 def indicator_func_to_matrix(size,indicator_func,dtype=bool):
     A = np.zeros(size)
     for i in range(size[0]):

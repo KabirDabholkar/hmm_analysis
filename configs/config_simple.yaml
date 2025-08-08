@@ -3,7 +3,7 @@ defaults:
   - _self_
 ####### multirun ##########
 # uncomment the multirun_cohmm below if you want to train many student models
-#  - hydra: multirun_cohmm
+  - hydra: multirun_cohmm
 
 
 # save paths. rename as you wish.
