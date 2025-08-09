@@ -21,6 +21,9 @@ from nlb_tools.make_tensors import make_eval_input_tensors, make_train_input_ten
     make_eval_target_tensors, h5_to_dict
 from nlb_tools.evaluation import evaluate
 
+from plotting_graphs.plot_graph import create_graph, create_graph2
+from plotting_graphs.histogram_graph import state_transition_counter, plot_state_transition_graph
+
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 
@@ -34,7 +37,8 @@ import prepare_model
 CONFIG_PATH = "configs"
 # CONFIG_NAME = "config_cohmm"
 # CONFIG_NAME = "config_cohmm_mc_maze"
-CONFIG_NAME = "config_simple"
+# CONFIG_NAME = "config_simple"
+CONFIG_NAME = "good_bad_example"
 
 
 @hydra.main(version_base='1.3', config_path=CONFIG_PATH, config_name=CONFIG_NAME)
@@ -308,6 +312,34 @@ def main(cfg):
                 ax.set_ylabel('ground truth')
                 ax.set_xlabel('intermediate projection')
                 fig.savefig('plots/test_plots/student_partial.png')
+
+        if hasattr(cfg.analysis,'plot_traffic_network') and cfg.analysis.plot_traffic_network:
+            all_data = instantiate(cfg.generate_all_data_with_states_dictmodule, _convert_='partial')(
+                    hmm_model=student)
+            obs, states = all_data['data_xarray'], all_data['states_data_xarray']
+            transition_matrix, state_visit_count = state_transition_counter(np.array(states),student.n_components)
+            # print('finished cfg.analysis.plot_traffic_network')
+            # for seed in range(20):
+            #     OmegaConf.update(cfg,"spring_kwargs.seed",seed)
+            #     plot_state_transition_graph(
+            #         transition_matrix/transition_matrix.sum(),
+            #         state_visit_count/state_visit_count.sum(),
+            #         edge_threshold=1e-2,
+            #         spring_kwargs = cfg.spring_kwargs if hasattr(cfg,'spring_kwargs') else {},
+            #         savepath = results_path+f'_histogram_graph_seed{seed}.pdf'
+            #     )
+            total_timesteps = states.shape[0] * states.shape[1]
+            total_transitions = states.shape[0] * (states.shape[1]-1)
+            graphsavepath = results_path + f'_histogram_graph_zero_threshold.pdf'
+            plot_state_transition_graph(
+                transition_matrix / total_transitions,
+                state_visit_count / total_timesteps,
+                edge_threshold=0,  # 1e-2,
+                spring_kwargs=cfg.spring_kwargs if hasattr(cfg, 'spring_kwargs') else {},
+                savepath=graphsavepath
+            )
+            print('saved plot to {}'.format(graphsavepath))
+
 
         if cfg.analysis.compute_similarity_metrics:
             test_student = deepcopy(student)

@@ -1,0 +1,103 @@
+defaults:
+  - config_cohmm
+  - _self_
+####### multirun ##########
+# uncomment the multirun_cohmm below if you want to train many student models
+#  - hydra: multirun_cohmm
+
+
+# save paths. rename as you wish.
+student_subpath: models_traintrials${train_trials}/ncomp${student.n_components}_${student_name}_id${student_index}
+teacher_save_path: ${path_to_save_files}/all_models_validated_v2/teacher_state${teacher.n_components}_${emission_mode}_partial_eps${teacher.transmat_epsilon}_length${length}
+student_save_path: ${teacher_save_path}/${student_subpath}
+
+
+run_train     : false
+save_trained  : false
+load_student_for_analysis: true
+run_analysis  : true
+save_results  : false
+
+use_teacher_as_student : false
+
+
+analysis:
+  compute_latent_decoding_linear    : true
+  compute_co_smoothing              : true
+  plot_traffic_network              : true
+
+### 4 state ring model
+teacher:
+  n_features: ${num_neurons_total}
+  n_components: 4
+  transmat_epsilon: 1e-2
+
+
+#### best
+#student:
+#  random_state:
+#    _target_: numpy.random.RandomState
+#    seed    : ${student_index}
+#  n_components: 10
+##  n_features  : ${eval:${num_neurons_heldin}+${num_neurons_heldout}}
+#student_index: 10
+#spring_kwargs:
+#  seed : 5
+#  # seed  : 3
+#  k     : 0.7
+#  scale : 0.5
+
+#### best 4 state
+# student:
+#   random_state:
+#     _target_: numpy.random.RandomState
+#     seed    : ${student_index}
+#   n_components: 4
+# student_index: 2
+# spring_kwargs:
+#   seed : 0
+#   k     : 0.7
+#   scale : 0.5
+
+
+#### worst
+#student:
+#  random_state:
+#    _target_: numpy.random.RandomState
+#    seed    : ${student_index}
+#  n_components: 8
+#student_index: 26
+
+### another worst
+# student:
+#   random_state:
+#     _target_: numpy.random.RandomState
+#     seed    : ${student_index}
+#   n_components: 8
+# student_index: 4
+
+#### the worst with correctly normalised kl divergence
+#student:
+#  random_state:
+#    _target_: numpy.random.RandomState
+#    seed    : ${student_index}
+#  n_components: 15
+#student_index: 11
+#spring_kwargs:
+#  seed : 2 #1
+#  k     : 0.7
+#  scale : 0.5
+
+### the worst
+student:
+  random_state:
+    _target_: numpy.random.RandomState
+    seed    : ${student_index}
+  n_components: 8
+student_index: 63 #0
+spring_kwargs:
+  # seed : 3
+  # seed : 19
+  seed : 6
+  k     : 0.7
+  scale : 0.5
